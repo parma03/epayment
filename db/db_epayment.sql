@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 29, 2025 at 07:12 AM
+-- Generation Time: Jul 01, 2025 at 02:52 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -43,8 +43,8 @@ CREATE TABLE `tb_barang` (
 --
 
 INSERT INTO `tb_barang` (`id_barang`, `nama_barang`, `deskripsi_barang`, `stok_barang`, `harga_barang`, `photo_barang`, `created_at`, `updated_at`) VALUES
-(1, 'tes barang 1', 'tes 1111', 3, 1500000.00, '685fc1f7e2771.jpg', '2025-06-28 17:20:39', '2025-06-28 18:47:15'),
-(2, 'tes barang 2', 'tew', 200, 1000000.00, '685fc2e1615cf.jpg', '2025-06-28 17:24:33', '2025-06-28 18:43:48');
+(1, 'tes barang 1', 'tes 1111', 3, 1500000.00, '685fc1f7e2771.jpg', '2025-06-29 17:20:39', '2025-06-29 17:20:39'),
+(2, 'tes barang 2', 'tew', 200, 1000000.00, '685fc2e1615cf.jpg', '2025-06-29 17:20:39', '2025-06-29 17:20:39');
 
 -- --------------------------------------------------------
 
@@ -67,7 +67,8 @@ CREATE TABLE `tb_pengiriman` (
 --
 
 INSERT INTO `tb_pengiriman` (`id_pengiriman`, `id_transaksi`, `id_driver`, `id_gudang`, `status`, `created_at`, `updated_at`) VALUES
-(2, 8, NULL, NULL, 'selesai', '2025-06-28 21:00:31', '2025-06-29 02:25:04');
+(2, 8, 4, 5, 'selesai', '2025-06-28 21:00:31', '2025-06-29 02:25:04'),
+(4, 9, NULL, 5, 'dikirim', '2025-06-29 12:29:30', '2025-06-30 00:29:36');
 
 -- --------------------------------------------------------
 
@@ -120,12 +121,13 @@ CREATE TABLE `tb_user` (
 --
 
 INSERT INTO `tb_user` (`id_user`, `email`, `password`, `role`, `photo_profile`, `created_at`, `update_at`) VALUES
-(1, 'admin@gmail.com', '123', 'Administrator', NULL, '2025-06-25 20:11:53', NULL),
+(1, 'admin@gmail.com', '123', 'Administrator', '6862b46960bc0.jpg', '2025-06-25 20:11:53', '2025-06-30 22:59:37'),
 (2, 'tes123@gmail.com1', '123', 'Administrator', '685facdb4e230.png', '2025-06-28 15:50:35', '2025-06-28 15:51:25'),
 (3, 'tespelayan@gmail.com', '123', 'Pelayan', '685fadddf27cb.png', '2025-06-28 15:54:53', '2025-06-28 15:59:25'),
 (4, 'tesdriver@gmail.com', '123', 'Driver', '685faedb49634.png', '2025-06-28 15:59:07', NULL),
 (5, 'tesgudang@gmail.com', '123', 'Gudang', '685fafb398a3b.png', '2025-06-28 16:02:43', NULL),
-(6, 'tespelanggan@gmail.com', '123', 'Pelanggan', '685fafe6b70d3.png', '2025-06-28 16:03:34', NULL);
+(6, 'tespelanggan@gmail.com', '123', 'Pelanggan', '685fafe6b70d3.png', '2025-06-28 16:03:34', NULL),
+(7, 'tespelanggan1@gmail.com', '8056174', 'Pelanggan', NULL, '2025-06-30 21:12:01', NULL);
 
 --
 -- Indexes for dumped tables
@@ -174,7 +176,7 @@ ALTER TABLE `tb_barang`
 -- AUTO_INCREMENT for table `tb_pengiriman`
 --
 ALTER TABLE `tb_pengiriman`
-  MODIFY `id_pengiriman` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_pengiriman` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `tb_transaksi`
@@ -186,7 +188,7 @@ ALTER TABLE `tb_transaksi`
 -- AUTO_INCREMENT for table `tb_user`
 --
 ALTER TABLE `tb_user`
-  MODIFY `id_user` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_user` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- Constraints for dumped tables

@@ -204,10 +204,10 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
                             </div>
                         </div>
                         <div class="mt-5 text-muted text-center">
-                            Don't have an account? <a href="auth-register.html">Create One</a>
+                            Don't have an account? <a href="register.php">Create One</a>
                         </div>
                         <div class="simple-footer">
-                            Copyright &copy; Stisla 2025
+                            Copyright &copy; Nesha Sadina 2025
                         </div>
                     </div>
                 </div>
