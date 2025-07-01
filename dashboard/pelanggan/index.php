@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../../db/koneksi.php';
+require_once '../../config/midtrans_config.php';
 
 // Inisialisasi variabel untuk alert
 $alert_message = '';
@@ -372,7 +373,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
 
     <!-- Midtrans Snap JS -->
     <script type="text/javascript" src="https://app.sandbox.midtrans.com/snap/snap.js"
-        data-client-key="Mid-client-i_gMpoalNpsZFVjf"></script>
+        data-client-key="<?php echo MidtransConfig::getClientKey(); ?>"></script>
 
     <script>
         // Search functionality

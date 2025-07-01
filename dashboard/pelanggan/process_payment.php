@@ -1,19 +1,16 @@
 <?php
 session_start();
 include '../../db/koneksi.php';
+require_once '../../config/midtrans_config.php';
 
 // Include Midtrans Config
 require_once '../../vendor/midtrans/midtrans-php/Midtrans.php';
 
-// Midtrans Configuration
-\Midtrans\Config::$serverKey = 'Mid-server-Cb96pXISJY2A3GnsGPcM-349'; // Ganti dengan Server Key Anda
-\Midtrans\Config::$isProduction = false; // Set to true for production
-\Midtrans\Config::$isSanitized = true;
-\Midtrans\Config::$is3ds = true;
 
 header('Content-Type: application/json');
 
 try {
+    MidtransConfig::init();
     // Validasi input
     if (
         !isset(
