@@ -32,7 +32,7 @@ if ($_POST && isset($_POST['action']) && $_POST['action'] === 'confirm_delivery'
 
         // Update status pengiriman menjadi 'selesai'
         $stmt = $pdo->prepare("UPDATE tb_pengiriman SET id_gudang = ?, status = 'dikirim', updated_at = NOW() WHERE id_pengiriman = ?");
-        $stmt->execute([$_SESSION['id_user'], $id_pengiriman]);
+        $result = $stmt->execute([$_SESSION['id_user'], $id_pengiriman]);
 
         if ($result) {
             $_SESSION['alert_message'] = 'Status pengiriman berhasil diupdate menjadi dikirim!';

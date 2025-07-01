@@ -32,7 +32,7 @@ if ($_POST && isset($_POST['action']) && $_POST['action'] === 'confirm_delivery'
 
         // Update status pengiriman menjadi 'selesai'
         $stmt = $pdo->prepare("UPDATE tb_pengiriman SET id_driver = ?, status = 'terkirim', updated_at = NOW() WHERE id_pengiriman = ?");
-        $stmt->execute([$_SESSION['id_user'], $id_pengiriman]);
+        $result = $stmt->execute([$_SESSION['id_user'], $id_pengiriman]);
 
         if ($result) {
             $_SESSION['alert_message'] = 'Status pengiriman berhasil diupdate menjadi terkirim!';
@@ -71,20 +71,26 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
 
 // Fetch transaksi yang memiliki status pengiriman 'dikirim' atau 'terkirim' dengan JOIN untuk mendapatkan data lengkap
 $stmt = $pdo->prepare("
-    SELECT 
+     SELECT 
         t.*,
         b.nama_barang,
         b.harga_barang,
         b.photo_barang,
         u.email as email_user,
         p.id_pengiriman,
+        p.id_driver,
+        p.id_gudang,
         p.status as status_pengiriman,
         p.created_at as shipping_created_at,
-        p.updated_at as shipping_updated_at
+        p.updated_at as shipping_updated_at,
+        driver.email as driver_email,
+        gudang.email as gudang_email
     FROM tb_transaksi t
     LEFT JOIN tb_barang b ON t.id_barang = b.id_barang
     LEFT JOIN tb_user u ON t.id_user = u.id_user
     INNER JOIN tb_pengiriman p ON t.id_transaksi = p.id_transaksi
+    LEFT JOIN tb_user driver ON p.id_driver = driver.id_user
+    LEFT JOIN tb_user gudang ON p.id_gudang = gudang.id_user
     WHERE p.status = 'dikirim'
     AND t.status_pembayaran = 'paid'
     AND p.id_driver = :id_user
@@ -93,6 +99,41 @@ $stmt = $pdo->prepare("
 $stmt->bindParam(':id_user', $_SESSION['id_user'], PDO::PARAM_INT);
 $stmt->execute();
 $transactions = $stmt->fetchAll();
+
+function getStatusDisplay($transaction)
+{
+    if ($transaction['id_gudang'] === null) {
+        return [
+            'text' => 'DI PROSES',
+            'class' => '',
+            'icon' => 'fas fa-clock'
+        ];
+    } else if ($transaction['status_pengiriman'] === 'disiapkan') {
+        return [
+            'text' => 'DISIAPKAN - ' . strtoupper($transaction['gudang_email']),
+            'class' => '',
+            'icon' => 'fas fa-box'
+        ];
+    } else if ($transaction['status_pengiriman'] === 'dikirim') {
+        return [
+            'text' => 'DIKIRIM',
+            'class' => '',
+            'icon' => 'fas fa-truck'
+        ];
+    } else if ($transaction['status_pengiriman'] === 'terkirim') {
+        return [
+            'text' => 'TERKIRIM',
+            'class' => '',
+            'icon' => 'fas fa-check'
+        ];
+    } else {
+        return [
+            'text' => strtoupper($transaction['status_pengiriman']),
+            'class' => '',
+            'icon' => 'fas fa-question'
+        ];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -297,43 +338,46 @@ $transactions = $stmt->fetchAll();
                                                                 </td>
                                                                 <td>
                                                                     <?php
-                                                                    $status_class = '';
-                                                                    $status_icon = '';
-                                                                    switch ($trans['status_pengiriman']) {
-                                                                        case 'dikirim':
-                                                                            $status_class = 'badge-warning';
-                                                                            $status_icon = 'fas fa-truck';
-                                                                            break;
-                                                                        case 'terkirim':
-                                                                            $status_class = 'badge-info';
-                                                                            $status_icon = 'fas fa-box';
-                                                                            break;
-                                                                        default:
-                                                                            $status_class = 'badge-secondary';
-                                                                            $status_icon = 'fas fa-question';
-                                                                    }
+                                                                    $statusDisplay = getStatusDisplay($trans);
                                                                     ?>
-                                                                    <span class="badge <?php echo $status_class; ?> badge-lg">
-                                                                        <i class="<?php echo $status_icon; ?> mr-1"></i>
-                                                                        <?php echo strtoupper($trans['status_pengiriman']); ?>
+                                                                    <span class=" <?php echo $statusDisplay['class']; ?>">
+                                                                        <i
+                                                                            class="<?php echo $statusDisplay['icon']; ?> mr-1"></i>
+                                                                        <?php echo $statusDisplay['text']; ?>
                                                                     </span>
+                                                                    <?php if ($trans['id_driver'] && $trans['status_pengiriman'] === 'dikirim'): ?>
+                                                                        <br><small class="text-muted">Driver:
+                                                                            <?php echo htmlspecialchars($trans['driver_email']); ?></small>
+                                                                    <?php endif; ?>
                                                                 </td>
                                                                 <td>
                                                                     <i class="fas fa-clock mr-1 text-muted"></i>
                                                                     <?php echo date('d/m/Y H:i', strtotime($trans['shipping_updated_at'] ?? $trans['shipping_created_at'])); ?>
                                                                 </td>
                                                                 <td class="text-center">
-                                                                    <div class="btn-group" role="group">
-                                                                        <button type="button" class="btn btn-info btn-sm"
-                                                                            onclick="viewTransaction(<?php echo htmlspecialchars(json_encode($trans)); ?>)"
-                                                                            title="Detail Transaksi">
-                                                                            <i class="fas fa-eye"></i>
+                                                                    <div class="btn-group-vertical" role="group">
+                                                                        <div class="btn-group mb-1" role="group">
+                                                                            <button type="button" class="btn btn-info btn-sm"
+                                                                                onclick="viewTransaction(<?php echo htmlspecialchars(json_encode($trans)); ?>)"
+                                                                                title="Detail Transaksi">
+                                                                                <i class="fas fa-eye"></i>
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <!-- Tombol Cetak Surat Jalan jika driver sudah ditugaskan -->
+                                                                        <button type="button"
+                                                                            class="btn btn-primary btn-sm mb-1"
+                                                                            onclick="printSuratJalan(<?php echo htmlspecialchars(json_encode($trans)); ?>)"
+                                                                            title="Cetak Surat Jalan">
+                                                                            <i class="fas fa-file-alt"></i> Surat Jalan
                                                                         </button>
-                                                                        <?php if ($trans['status_pengiriman'] === 'disiapkan'): ?>
-                                                                            <button type="button" class="btn btn-primary btn-sm"
+
+                                                                        <?php if ($trans['status_pengiriman'] === 'dikirim'): ?>
+                                                                            <!-- Tombol Konfirmasi Selesai -->
+                                                                            <button type="button" class="btn btn-success btn-sm"
                                                                                 onclick="confirmDelivery(<?php echo $trans['id_pengiriman']; ?>, '<?php echo htmlspecialchars($trans['order_id']); ?>')"
-                                                                                title="Konfirmasi Diterima">
-                                                                                <i class="fas fa-check-double"></i>
+                                                                                title="Konfirmasi Selesai">
+                                                                                <i class="fas fa-check-double"></i> Selesai
                                                                             </button>
                                                                         <?php endif; ?>
                                                                     </div>
@@ -355,6 +399,63 @@ $transactions = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- Modal Assign Driver -->
+    <div class="modal fade" id="assignDriverModal" tabindex="-1" role="dialog" aria-labelledby="assignDriverModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="assignDriverModalLabel">
+                        <i class="fas fa-user-plus mr-2"></i>Tugaskan Driver
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-truck mr-2"></i>
+                            Pilih driver untuk mengirim Order ID <strong><span id="assignOrderId"></span></strong>
+                        </div>
+                    </div>
+
+                    <form id="assignDriverForm" method="POST" action="">
+                        <input type="hidden" name="action" value="assign_driver">
+                        <input type="hidden" name="id_pengiriman" id="assignIdPengiriman">
+
+                        <div class="form-group">
+                            <label for="id_driver"><i class="fas fa-user mr-2"></i>Pilih Driver:</label>
+                            <select name="id_driver" id="id_driver" class="form-control" required>
+                                <option value="">-- Pilih Driver --</option>
+                                <?php foreach ($drivers as $driver): ?>
+                                    <option value="<?php echo $driver['id_user']; ?>">
+                                        <?php echo htmlspecialchars($driver['email']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="text-center">
+                            <i class="fas fa-shipping-fast fa-3x text-warning mb-3"></i>
+                            <p class="text-muted">Setelah driver ditugaskan, status akan berubah menjadi
+                                <strong>DIKIRIM</strong>
+                            </p>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-lg" data-dismiss="modal">
+                        <i class="fas fa-times mr-1"></i>Batal
+                    </button>
+                    <button type="submit" form="assignDriverForm" class="btn btn-warning btn-lg">
+                        <i class="fas fa-user-plus mr-1"></i>Tugaskan Driver
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Add Confirmation Modal -->
     <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-labelledby="confirmModalLabel"
         aria-hidden="true">
@@ -373,12 +474,12 @@ $transactions = $stmt->fetchAll();
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle mr-2"></i>
                             Apakah Anda yakin barang dengan Order ID <strong><span id="confirmOrderId"></span></strong>
-                            memiliki stok di gudang?
+                            sudah diterima oleh pelanggan?
                         </div>
                     </div>
                     <div class="text-center">
                         <i class="fas fa-box-open fa-3x text-primary mb-3"></i>
-                        <p class="text-muted">Status pengiriman akan diubah menjadi <strong>DIKIRIM</strong> dan tidak
+                        <p class="text-muted">Status pengiriman akan diubah menjadi <strong>SELESAI</strong> dan tidak
                             dapat dibatalkan.</p>
                     </div>
                 </div>
@@ -509,9 +610,124 @@ $transactions = $stmt->fetchAll();
                     <button type="button" class="btn btn-secondary btn-lg" data-dismiss="modal">
                         <i class="fas fa-times mr-1"></i>Tutup
                     </button>
-                    <button type="button" class="btn btn-success btn-lg" onclick="printFromModal()">
-                        <i class="fas fa-print mr-1"></i>Cetak Invoice
-                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Surat Jalan Template for Printing -->
+    <div id="suratJalanTemplate" style="display: none;">
+        <div class="surat-jalan-print">
+            <div style="padding: 20px; font-family: Arial, sans-serif; background: white; color: #333;">
+                <!-- Header -->
+                <div
+                    style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px;">
+                    <h1 style="color: #333; margin: 0; font-size: 28px;">SURAT JALAN</h1>
+                    <p style="margin: 5px 0; color: #666; font-size: 14px;">E-Payment System</p>
+                </div>
+
+                <!-- Info Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                    <div>
+                        <h3
+                            style="color: #333; margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+                            Informasi Pengiriman</h3>
+                        <table style="width: 100%; border: none;">
+                            <tr>
+                                <td style="border: none; padding: 5px 0; width: 40%; font-weight: bold;">No. Surat
+                                    Jalan:</td>
+                                <td style="border: none; padding: 5px 0;" id="suratJalanNo">-</td>
+                            </tr>
+                            <tr>
+                                <td style="border: none; padding: 5px 0; font-weight: bold;">Order ID:</td>
+                                <td style="border: none; padding: 5px 0;" id="suratJalanOrderId">-</td>
+                            </tr>
+                            <tr>
+                                <td style="border: none; padding: 5px 0; font-weight: bold;">Tanggal Kirim:</td>
+                                <td style="border: none; padding: 5px 0;" id="suratJalanDate">-</td>
+                            </tr>
+                            <tr>
+                                <td style="border: none; padding: 5px 0; font-weight: bold;">Driver:</td>
+                                <td style="border: none; padding: 5px 0;" id="suratJalanDriver">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div>
+                        <h3
+                            style="color: #333; margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+                            Penerima</h3>
+                        <table style="width: 100%; border: none;">
+                            <tr>
+                                <td style="border: none; padding: 5px 0; width: 30%; font-weight: bold;">Nama:</td>
+                                <td style="border: none; padding: 5px 0;" id="suratJalanCustomerName">-</td>
+                            </tr>
+                            <tr>
+                                <td style="border: none; padding: 5px 0; font-weight: bold;">No. HP:</td>
+                                <td style="border: none; padding: 5px 0;" id="suratJalanCustomerPhone">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Alamat Tujuan -->
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: #333; margin-bottom: 10px;">Alamat Tujuan</h3>
+                    <div
+                        style="background: #f8f9fa; padding: 15px; border-left: 4px solid #ffc107; border-radius: 4px;">
+                        <p id="suratJalanAddress" style="margin: 0; font-size: 14px;">-</p>
+                    </div>
+                </div>
+
+                <!-- Tabel Barang -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+                    <thead>
+                        <tr style="background: #333; color: white;">
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Nama Barang</th>
+                            <th style="padding: 12px; text-align: center; border: 1px solid #333; width: 15%;">Jumlah
+                            </th>
+                            <th style="padding: 12px; text-align: center; border: 1px solid #333; width: 25%;">
+                                Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 12px; border: 1px solid #ddd;" id="suratJalanProductName">-</td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;"
+                                id="suratJalanQuantity">-</td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">Barang dalam kondisi
+                                baik</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Tanda Tangan -->
+                <div style="display: flex; justify-content: space-between; margin-top: 50px;">
+                    <div style="text-align: center; width: 250px;">
+                        <p style="margin: 0; font-weight: bold;">Pengirim</p>
+                        <div style="height: 80px;"></div>
+                        <div style="border-top: 1px solid #333; padding-top: 5px;">
+                            <p style="margin: 0; font-weight: bold;" id="suratJalanDriverSign">-</p>
+                            <small style="color: #666;">Driver</small>
+                        </div>
+                    </div>
+                    <div style="text-align: center; width: 250px;">
+                        <p style="margin: 0; font-weight: bold;">Penerima</p>
+                        <div style="height: 80px;"></div>
+                        <div style="border-top: 1px solid #333; padding-top: 5px;">
+                            <p style="margin: 0; font-weight: bold;" id="suratJalanReceiverSign">-</p>
+                            <small style="color: #666;">Penerima</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <p style="color: #666; margin: 0; font-size: 12px;">
+                        Surat jalan ini dicetak pada: <span id="suratJalanPrintTime">-</span>
+                    </p>
+                    <p style="color: #666; margin: 5px 0 0 0; font-size: 11px;">
+                        <em>Harap tanda tangan penerima sebagai bukti penerimaan barang</em>
+                    </p>
                 </div>
             </div>
         </div>
@@ -618,8 +834,9 @@ $transactions = $stmt->fetchAll();
 
             $("#table-1").DataTable({
                 "columnDefs": [
-                    { "orderable": false, "targets": [1, 10] }, // Updated index for action column
-                    { "className": "text-center", "targets": [0, 10] }
+                    { "orderable": false, "targets": [1, 10] }, // Image and action columns
+                    { "className": "text-center", "targets": [0, 10] },
+                    { "width": "150px", "targets": [10] } // Action column width
                 ],
                 "responsive": true,
                 "pageLength": 10,
@@ -653,6 +870,121 @@ $transactions = $stmt->fetchAll();
             $('#confirmIdPengiriman').val(idPengiriman);
             $('#confirmOrderId').text(orderId);
             $('#confirmModal').modal('show');
+        }
+
+        // Function to show assign driver modal
+        function assignDriver(idPengiriman, orderId) {
+            $('#assignIdPengiriman').val(idPengiriman);
+            $('#assignOrderId').text(orderId);
+            $('#id_driver').val(''); // Reset dropdown
+            $('#assignDriverModal').modal('show');
+        }
+
+        // Function to print surat jalan
+        function printSuratJalan(transaction) {
+            populateSuratJalanData(transaction);
+
+            // Sembunyikan semua konten kecuali surat jalan template
+            const originalDisplay = [];
+            document.querySelectorAll('body > *:not(#suratJalanTemplate)').forEach((element, index) => {
+                originalDisplay[index] = element.style.display;
+                element.style.display = 'none';
+            });
+
+            // Tampilkan surat jalan template
+            document.getElementById('suratJalanTemplate').style.display = 'block';
+
+            // Print
+            window.print();
+
+            // Kembalikan tampilan semula setelah print
+            setTimeout(() => {
+                document.getElementById('suratJalanTemplate').style.display = 'none';
+                document.querySelectorAll('body > *:not(#suratJalanTemplate)').forEach((element, index) => {
+                    element.style.display = originalDisplay[index];
+                });
+            }, 100);
+        }
+        const suratJalanStyles = `
+<style>
+/* Surat Jalan Print Styles */
+@media print {
+    .surat-jalan-print {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+    }
+    
+    .surat-jalan-print * {
+        visibility: visible !important;
+    }
+    
+    .surat-jalan-print table {
+        page-break-inside: avoid;
+    }
+    
+    .surat-jalan-print .signature-section {
+        page-break-inside: avoid;
+    }
+    
+    /* Hide everything else when printing surat jalan */
+    body.printing-surat-jalan > *:not(#suratJalanTemplate) {
+        display: none !important;
+    }
+    
+    body.printing-surat-jalan #suratJalanTemplate {
+        display: block !important;
+    }
+}
+
+/* Enhanced surat jalan template styles */
+#suratJalanTemplate {
+    display: none;
+}
+
+#suratJalanTemplate .surat-jalan-print {
+    font-family: Arial, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    color: #333;
+}
+
+#suratJalanTemplate .signature-section {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 50px;
+}
+
+#suratJalanTemplate .signature-box {
+    text-align: center;
+    width: 200px;
+}
+
+#suratJalanTemplate .signature-line {
+    border-top: 1px solid #333;
+    padding-top: 5px;
+    margin-top: 60px;
+}
+</style>
+`;
+        // Function to populate surat jalan data
+        function populateSuratJalanData(transaction) {
+            // Generate surat jalan number
+            let suratJalanNo = 'SJ-' + transaction.order_id + '-' + new Date().getTime();
+
+            $('#suratJalanNo').text(suratJalanNo);
+            $('#suratJalanOrderId').text(transaction.order_id);
+            $('#suratJalanDate').text(new Date().toLocaleDateString('id-ID'));
+            $('#suratJalanDriver').text(transaction.driver_email || 'Driver tidak tersedia');
+            $('#suratJalanCustomerName').text(transaction.nama_pemesan);
+            $('#suratJalanCustomerPhone').text(transaction.nohp_pemesan);
+            $('#suratJalanAddress').text(transaction.alamat_pemesan);
+            $('#suratJalanProductName').text(transaction.nama_barang || 'Produk Tidak Ditemukan');
+            $('#suratJalanQuantity').text(transaction.jumlah_beli + ' pcs');
+            $('#suratJalanDriverSign').text(transaction.driver_email || 'Driver');
+            $('#suratJalanReceiverSign').text(transaction.nama_pemesan);
+            $('#suratJalanPrintTime').text(new Date().toLocaleString('id-ID'));
         }
 
         // Function to view transaction details
@@ -709,6 +1041,30 @@ $transactions = $stmt->fetchAll();
 
             submitBtn.prop('disabled', true);
             submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses...');
+
+            // Allow form to submit naturally
+            setTimeout(function () {
+                if (submitBtn.length) {
+                    submitBtn.prop('disabled', false);
+                    submitBtn.html(originalText);
+                }
+            }, 3000);
+        });
+
+        // Handle assign driver form submission
+        $('#assignDriverForm').on('submit', function (e) {
+            let submitBtn = $(this).find('button[type="submit"]');
+            let originalText = submitBtn.html();
+
+            // Validation
+            if (!$('#id_driver').val()) {
+                e.preventDefault();
+                alert('Silakan pilih driver terlebih dahulu!');
+                return false;
+            }
+
+            submitBtn.prop('disabled', true);
+            submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Menugaskan...');
 
             // Allow form to submit naturally
             setTimeout(function () {
@@ -801,6 +1157,34 @@ $transactions = $stmt->fetchAll();
             $('.no-print').show();
             $('#invoiceTemplate').hide();
         });
+
+        // Tambahkan styles ke head jika belum ada
+        if (!document.getElementById('suratJalanStyles')) {
+            const styleElement = document.createElement('div');
+            styleElement.id = 'suratJalanStyles';
+            styleElement.innerHTML = suratJalanStyles;
+            document.head.appendChild(styleElement);
+        }
+
+        // Event listener untuk print events surat jalan
+        window.addEventListener('beforeprint', function () {
+            if (document.getElementById('suratJalanTemplate').style.display !== 'none') {
+                document.body.classList.add('printing-surat-jalan');
+            }
+        });
+
+        window.addEventListener('afterprint', function () {
+            document.body.classList.remove('printing-surat-jalan');
+        });
+
+        // Fungsi untuk print surat jalan dari modal (jika diperlukan)
+        function printSuratJalanFromModal() {
+            if (currentTransactionData) {
+                printSuratJalan(currentTransactionData);
+            } else {
+                alert('Data transaksi tidak tersedia untuk dicetak.');
+            }
+        }
 
         // Enhanced search functionality
         $('#table-1_filter input').on('keyup', function () {
@@ -943,6 +1327,41 @@ $transactions = $stmt->fetchAll();
                     $(this).remove();
                 });
             }, 5000);
+        }
+
+        // Function to get status badge HTML
+        function getStatusBadge(status, gudangEmail, driverEmail) {
+            let badge = '';
+
+            if (status === 'disiapkan' && gudangEmail) {
+                badge = `<span class="badge badge-info badge-lg">
+                    <i class="fas fa-box mr-1"></i>DISIAPKAN - ${gudangEmail.toUpperCase()}
+                 </span>`;
+            } else if (status === 'dikirim' && driverEmail) {
+                badge = `<span class="badge badge-warning badge-lg">
+                    <i class="fas fa-truck mr-1"></i>DIKIRIM
+                 </span>
+                 <br><small class="text-muted">Driver: ${driverEmail}</small>`;
+            } else if (status === 'terkirim') {
+                badge = `<span class="badge badge-success badge-lg">
+                    <i class="fas fa-check mr-1"></i>TERKIRIM
+                 </span>`;
+            } else {
+                badge = `<span class="badge badge-secondary badge-lg">
+                    <i class="fas fa-clock mr-1"></i>DI PROSES
+                 </span>`;
+            }
+
+            return badge;
+        }
+
+        // Enhanced notification for driver assignment
+        function showDriverAssignedNotification(driverEmail, orderId) {
+            showNotification(
+                'Driver Ditugaskan!',
+                `Driver ${driverEmail} telah ditugaskan untuk Order ID: ${orderId}`,
+                'success'
+            );
         }
 
         // Console info for debugging
