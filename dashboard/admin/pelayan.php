@@ -1031,13 +1031,45 @@ $administrators = $stmt->fetchAll();
                 reverseButtons: true,
                 customClass: {
                     popup: 'animate__animated animate__zoomIn'
-                }
+                },
+                allowOutsideClick: false, // Prevent closing by clicking outside
+                allowEscapeKey: false     // Prevent closing with ESC key
             }).then((result) => {
                 if (result.isConfirmed) {
-                    $('#delete_id_user').val(id);
-                    $('#delete_email').text(email);
-                    $('#deleteModal').modal('show');
+                    // Show loading
+                    Swal.fire({
+                        title: 'Menghapus...',
+                        text: 'Sedang memproses penghapusan data',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        didOpen: () => {
+                            Swal.showLoading()
+                        }
+                    });
+
+                    // Create form and submit
+                    const form = $('<form>', {
+                        method: 'POST',
+                        action: window.location.href
+                    });
+
+                    form.append($('<input>', {
+                        type: 'hidden',
+                        name: 'action',
+                        value: 'delete'
+                    }));
+
+                    form.append($('<input>', {
+                        type: 'hidden',
+                        name: 'id_user',
+                        value: id
+                    }));
+
+                    // Append form to body and submit
+                    $('body').append(form);
+                    form.submit();
                 }
+                // If cancelled, SweetAlert2 will automatically close
             });
         }
 
