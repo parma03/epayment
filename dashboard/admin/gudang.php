@@ -116,7 +116,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             header("Location: " . $_SERVER['PHP_SELF']);
             exit();
-
         } catch (Exception $e) {
             $_SESSION['alert_message'] = 'Terjadi kesalahan: ' . $e->getMessage();
             $_SESSION['alert_type'] = 'danger';
@@ -883,7 +882,7 @@ $administrators = $stmt->fetchAll();
 
     <script>
         // Initialize DataTable with enhanced features
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Destroy existing DataTable if it exists
             if ($.fn.DataTable.isDataTable('#table-1')) {
                 $('#table-1').DataTable().destroy();
@@ -891,14 +890,24 @@ $administrators = $stmt->fetchAll();
 
             // Initialize new DataTable with enhanced styling
             $("#table-1").DataTable({
-                "columnDefs": [
-                    { "orderable": false, "targets": [1, 6] },
-                    { "className": "text-center", "targets": [0, 6] }
+                "columnDefs": [{
+                        "orderable": false,
+                        "targets": [1, 6]
+                    },
+                    {
+                        "className": "text-center",
+                        "targets": [0, 6]
+                    }
                 ],
                 "responsive": true,
                 "pageLength": 10,
-                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "Semua"]],
-                "order": [[4, "desc"]], // Sort by created_at descending
+                "lengthMenu": [
+                    [5, 10, 25, 50, -1],
+                    [5, 10, 25, 50, "Semua"]
+                ],
+                "order": [
+                    [4, "desc"]
+                ], // Sort by created_at descending
                 "language": {
                     "lengthMenu": "Tampilkan _MENU_ data per halaman",
                     "zeroRecords": "Data tidak ditemukan",
@@ -917,7 +926,7 @@ $administrators = $stmt->fetchAll();
                     "loadingRecords": "⏳ Memuat data..."
                 },
                 "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
-                "drawCallback": function (settings) {
+                "drawCallback": function(settings) {
                     // Add animation to table rows
                     $('.table tbody tr').addClass('animate__animated animate__fadeIn');
                 }
@@ -965,7 +974,7 @@ $administrators = $stmt->fetchAll();
                 }
 
                 const reader = new FileReader();
-                reader.onload = function (e) {
+                reader.onload = function(e) {
                     preview.attr('src', e.target.result).show().addClass('animate__animated animate__zoomIn');
                 }
                 reader.readAsDataURL(file);
@@ -976,6 +985,9 @@ $administrators = $stmt->fetchAll();
 
         // Enhanced edit administrator function
         function editAdmin(admin) {
+            if (Swal.isVisible()) {
+                Swal.close();
+            }
             $('#edit_id_user').val(admin.id_user);
             $('#edit_email').val(admin.email);
             $('#edit_password').val(admin.password);
@@ -999,6 +1011,9 @@ $administrators = $stmt->fetchAll();
 
         // Enhanced view administrator function
         function viewAdmin(admin) {
+            if (Swal.isVisible()) {
+                Swal.close();
+            }
             $('#viewEmail').text(admin.email);
             $('#viewRole').text(admin.role);
             $('#viewEmailDetail').text(admin.email);
@@ -1019,65 +1034,68 @@ $administrators = $stmt->fetchAll();
 
         // Enhanced delete Gudang function with SweetAlert2
         function deleteAdmin(id, email) {
-            Swal.fire({
-                title: '⚠️ Konfirmasi Hapus',
-                html: `Apakah Anda yakin ingin menghapus Gudang:<br><strong class="text-danger">${email}</strong>?`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: '🗑️ Ya, Hapus!',
-                cancelButtonText: '❌ Batal',
-                reverseButtons: true,
-                customClass: {
-                    popup: 'animate__animated animate__zoomIn'
-                },
-                allowOutsideClick: false, // Prevent closing by clicking outside
-                allowEscapeKey: false     // Prevent closing with ESC key
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Show loading
-                    Swal.fire({
-                        title: 'Menghapus...',
-                        text: 'Sedang memproses penghapusan data',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        didOpen: () => {
-                            Swal.showLoading()
+            $('.modal').modal('hide');
+            setTimeout(() => {
+
+                Swal.fire({
+                    title: '⚠️ Konfirmasi Hapus',
+                    html: `Apakah Anda yakin ingin menghapus Gudang:<br><strong class="text-danger">${email}</strong>?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: '🗑️ Ya, Hapus!',
+                    cancelButtonText: '❌ Batal',
+                    reverseButtons: true,
+                    allowOutsideClick: false,
+                    allowEscapeKey: true,
+                    stopKeydownPropagation: false,
+                    customClass: {
+                        popup: 'animate__animated animate__zoomIn'
+                    },
+                    // Improved event handling
+                    didOpen: () => {
+                        // Ensure proper focus and keyboard handling
+                        const popup = Swal.getPopup();
+                        if (popup) {
+                            popup.setAttribute('tabindex', '-1');
+                            popup.focus();
                         }
-                    });
-
-                    // Create form and submit
-                    const form = $('<form>', {
-                        method: 'POST',
-                        action: window.location.href
-                    });
-
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'action',
-                        value: 'delete'
-                    }));
-
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'id_user',
-                        value: id
-                    }));
-
-                    // Append form to body and submit
-                    $('body').append(form);
-                    form.submit();
-                }
-                // If cancelled, SweetAlert2 will automatically close
-            });
+                    },
+                    willClose: () => {
+                        // Cleanup when closing
+                        $('.swal2-backdrop-show').remove();
+                        $('body').removeClass('swal2-shown swal2-no-backdrop');
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#delete_id_user').val(id);
+                        $('#delete_email').text(email);
+                        $('#deleteModal').modal('show');
+                    }
+                    cleanupSweetAlert();
+                }).catch((error) => {
+                    // Handle error dan cleanup
+                    console.log('SweetAlert error:', error);
+                    cleanupSweetAlert();
+                });
+            }, 100);
+        }
+        // Helper function untuk membersihkan SweetAlert
+        function cleanupSweetAlert() {
+            setTimeout(() => {
+                $('.swal2-backdrop-show').remove();
+                $('.swal2-container').remove();
+                $('body').removeClass('swal2-shown swal2-no-backdrop');
+                $('body').css('padding-right', '');
+            }, 50);
         }
         // Form validation enhancement
         function validateForm(formId) {
             const form = $(formId);
             let isValid = true;
 
-            form.find('input[required], select[required]').each(function () {
+            form.find('input[required], select[required]').each(function() {
                 if (!$(this).val()) {
                     $(this).addClass('is-invalid');
                     isValid = false;
@@ -1090,28 +1108,28 @@ $administrators = $stmt->fetchAll();
         }
 
         // Auto hide alerts with enhanced animation
-        setTimeout(function () {
+        setTimeout(function() {
             $('.alert').addClass('animate__animated animate__fadeOutRight');
-            setTimeout(function () {
+            setTimeout(function() {
                 $('.alert').remove();
             }, 1000);
         }, 5000);
 
         // Add hover effects to table rows
-        $(document).on('mouseenter', '.table tbody tr', function () {
+        $(document).on('mouseenter', '.table tbody tr', function() {
             $(this).addClass('table-active');
-        }).on('mouseleave', '.table tbody tr', function () {
+        }).on('mouseleave', '.table tbody tr', function() {
             $(this).removeClass('table-active');
         });
 
         // Enhanced file upload drag and drop
-        $('.custom-file-upload').on('dragover', function (e) {
+        $('.custom-file-upload').on('dragover', function(e) {
             e.preventDefault();
             $(this).addClass('border-primary bg-light');
-        }).on('dragleave', function (e) {
+        }).on('dragleave', function(e) {
             e.preventDefault();
             $(this).removeClass('border-primary bg-light');
-        }).on('drop', function (e) {
+        }).on('drop', function(e) {
             e.preventDefault();
             $(this).removeClass('border-primary bg-light');
 
@@ -1124,14 +1142,14 @@ $administrators = $stmt->fetchAll();
         });
 
         // Add success animation for form submissions
-        $('form').on('submit', function () {
+        $('form').on('submit', function() {
             const submitBtn = $(this).find('button[type=submit]');
             submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses...')
                 .prop('disabled', true);
         });
 
         // Add loading animation to buttons
-        $('.btn').on('click', function () {
+        $('.btn').on('click', function() {
             if ($(this).attr('type') === 'submit') {
                 const originalText = $(this).html();
                 $(this).html('<i class="fas fa-spinner fa-spin mr-1"></i>Loading...');
@@ -1143,33 +1161,45 @@ $administrators = $stmt->fetchAll();
         });
 
         // Initialize animate.css classes
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('.card').addClass('animate__animated animate__fadeInUp');
             $('.alert').addClass('animate__animated animate__slideInRight');
         });
 
-        // Add keyboard shortcuts
-        $(document).keydown(function (e) {
-            // Ctrl + N for new Gudang
-            if (e.ctrlKey && e.keyCode === 78) {
-                e.preventDefault();
-                $('#addModal').modal('show');
-            }
+        // FIXED: Improved keyboard shortcuts without conflict
+        $(document).keydown(function(e) {
+            // Cek apakah SweetAlert sedang aktif
+            if (Swal.isVisible()) {
+                if (e.keyCode === 27) { // ESC key
+                    e.preventDefault();
+                    e.stopPropagation();
+                    Swal.close();
+                    cleanupSweetAlert();
+                    return false;
+                }
+            } else {
+                // Keyboard shortcuts hanya aktif jika SweetAlert tidak terlihat
 
-            // ESC to close modals
-            if (e.keyCode === 27) {
-                $('.modal').modal('hide');
+                // Ctrl + N for new barang
+                if (e.ctrlKey && e.keyCode === 78) {
+                    e.preventDefault();
+                    $('#addModal').modal('show');
+                }
+
+                // ESC to close modals (hanya modal Bootstrap)
+                if (e.keyCode === 27) {
+                    $('.modal').modal('hide');
+                }
             }
         });
 
         // Add search highlight functionality
-        $('#table-1').on('draw.dt', function () {
+        $('#table-1').on('draw.dt', function() {
             const searchTerm = $('.dataTables_filter input').val();
             if (searchTerm) {
                 $('.table tbody').highlight(searchTerm);
             }
         });
-
     </script>
 
     <!-- SweetAlert2 for better alerts -->

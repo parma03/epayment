@@ -69,7 +69,6 @@ if ($_POST && isset($_POST['action'])) {
 
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
-
     } catch (Exception $e) {
         $_SESSION['alert_message'] = 'Error: ' . $e->getMessage();
         $_SESSION['alert_type'] = 'danger';
@@ -193,14 +192,6 @@ function getStatusDisplay($transaction)
         .currency {
             font-weight: bold;
             color: #28a745;
-        }
-
-        . {
-            font-family: 'Courier New', monospace;
-            background: #f8f9fa;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.85em;
         }
 
         @media print {
@@ -871,21 +862,34 @@ function getStatusDisplay($transaction)
         let currentTransactionData = null;
 
         // Initialize DataTable
-        $(document).ready(function () {
+        $(document).ready(function() {
             if ($.fn.DataTable.isDataTable('#table-1')) {
                 $('#table-1').DataTable().destroy();
             }
 
             $("#table-1").DataTable({
-                "columnDefs": [
-                    { "orderable": false, "targets": [1, 10] }, // Image and action columns
-                    { "className": "text-center", "targets": [0, 10] },
-                    { "width": "150px", "targets": [10] } // Action column width
+                "columnDefs": [{
+                        "orderable": false,
+                        "targets": [1, 10]
+                    }, // Image and action columns
+                    {
+                        "className": "text-center",
+                        "targets": [0, 10]
+                    },
+                    {
+                        "width": "150px",
+                        "targets": [10]
+                    } // Action column width
                 ],
                 "responsive": true,
                 "pageLength": 10,
-                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "Semua"]],
-                "order": [[9, "desc"]], // Sort by shipping date descending
+                "lengthMenu": [
+                    [5, 10, 25, 50, -1],
+                    [5, 10, 25, 50, "Semua"]
+                ],
+                "order": [
+                    [9, "desc"]
+                ], // Sort by shipping date descending
                 "language": {
                     "lengthMenu": "Tampilkan _MENU_ data per halaman",
                     "zeroRecords": "Data tidak ditemukan",
@@ -1079,7 +1083,7 @@ function getStatusDisplay($transaction)
             $('#viewModal').modal('show');
         }
 
-        $('#confirmForm').on('submit', function (e) {
+        $('#confirmForm').on('submit', function(e) {
             let submitBtn = $(this).find('button[type="submit"]');
             let originalText = submitBtn.html();
 
@@ -1087,7 +1091,7 @@ function getStatusDisplay($transaction)
             submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses...');
 
             // Allow form to submit naturally
-            setTimeout(function () {
+            setTimeout(function() {
                 if (submitBtn.length) {
                     submitBtn.prop('disabled', false);
                     submitBtn.html(originalText);
@@ -1096,7 +1100,7 @@ function getStatusDisplay($transaction)
         });
 
         // Handle assign driver form submission
-        $('#assignDriverForm').on('submit', function (e) {
+        $('#assignDriverForm').on('submit', function(e) {
             let submitBtn = $(this).find('button[type="submit"]');
             let originalText = submitBtn.html();
 
@@ -1111,7 +1115,7 @@ function getStatusDisplay($transaction)
             submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Menugaskan...');
 
             // Allow form to submit naturally
-            setTimeout(function () {
+            setTimeout(function() {
                 if (submitBtn.length) {
                     submitBtn.prop('disabled', false);
                     submitBtn.html(originalText);
@@ -1150,16 +1154,16 @@ function getStatusDisplay($transaction)
         }
 
         // Auto hide alert after 5 seconds
-        setTimeout(function () {
+        setTimeout(function() {
             $('.alert-container .alert').fadeOut('slow');
         }, 5000);
 
         // Enhance table with hover effects
-        $('#table-1 tbody').on('mouseenter', 'tr', function () {
+        $('#table-1 tbody').on('mouseenter', 'tr', function() {
             $(this).addClass('table-active');
         });
 
-        $('#table-1 tbody').on('mouseleave', 'tr', function () {
+        $('#table-1 tbody').on('mouseleave', 'tr', function() {
             $(this).removeClass('table-active');
         });
 
@@ -1170,7 +1174,7 @@ function getStatusDisplay($transaction)
         });
 
         // Format currency on page load
-        $('.currency').each(function () {
+        $('.currency').each(function() {
             let text = $(this).text();
             if (text.includes('Rp')) {
                 // Already formatted
@@ -1183,20 +1187,20 @@ function getStatusDisplay($transaction)
         });
 
         // Refresh data every 30 seconds
-        setInterval(function () {
+        setInterval(function() {
             // Optional: Add auto-refresh functionality
             // location.reload();
         }, 30000);
 
         // Print styles enhancement
-        window.addEventListener('beforeprint', function () {
+        window.addEventListener('beforeprint', function() {
             // Hide elements that shouldn't be printed
             $('.no-print').hide();
             // Show only invoice template
             $('#invoiceTemplate').show();
         });
 
-        window.addEventListener('afterprint', function () {
+        window.addEventListener('afterprint', function() {
             // Restore page elements
             $('.no-print').show();
             $('#invoiceTemplate').hide();
@@ -1211,13 +1215,13 @@ function getStatusDisplay($transaction)
         }
 
         // Event listener untuk print events surat jalan
-        window.addEventListener('beforeprint', function () {
+        window.addEventListener('beforeprint', function() {
             if (document.getElementById('suratJalanTemplate').style.display !== 'none') {
                 document.body.classList.add('printing-surat-jalan');
             }
         });
 
-        window.addEventListener('afterprint', function () {
+        window.addEventListener('afterprint', function() {
             document.body.classList.remove('printing-surat-jalan');
         });
 
@@ -1231,11 +1235,11 @@ function getStatusDisplay($transaction)
         }
 
         // Enhanced search functionality
-        $('#table-1_filter input').on('keyup', function () {
+        $('#table-1_filter input').on('keyup', function() {
             let searchTerm = $(this).val().toLowerCase();
             if (searchTerm.length > 2) {
                 // Highlight search terms
-                $('#table-1 tbody tr').each(function () {
+                $('#table-1 tbody tr').each(function() {
                     let rowText = $(this).text().toLowerCase();
                     if (rowText.includes(searchTerm)) {
                         $(this).addClass('table-warning');
@@ -1249,26 +1253,26 @@ function getStatusDisplay($transaction)
         });
 
         // Modal enhancement
-        $('#viewModal').on('shown.bs.modal', function () {
+        $('#viewModal').on('shown.bs.modal', function() {
             // Focus on close button for accessibility
             $(this).find('[data-dismiss="modal"]').first().focus();
         });
 
         // Error handling for images
-        $('.product-image').on('error', function () {
+        $('.product-image').on('error', function() {
             $(this).attr('src', '../../assets/img/no-image.png');
             $(this).addClass('bg-light');
         });
 
         // Add loading state for actions
-        $('button[onclick^="viewTransaction"], button[onclick^="printInvoice"]').on('click', function () {
+        $('button[onclick^="viewTransaction"], button[onclick^="printInvoice"]').on('click', function() {
             let $btn = $(this);
             let originalHtml = $btn.html();
 
             $btn.prop('disabled', true);
             $btn.html('<i class="fas fa-spinner fa-spin"></i>');
 
-            setTimeout(function () {
+            setTimeout(function() {
                 $btn.prop('disabled', false);
                 $btn.html(originalHtml);
             }, 1000);
@@ -1289,7 +1293,7 @@ function getStatusDisplay($transaction)
         function animateCounter(element, target) {
             let current = 0;
             let increment = target / 50;
-            let timer = setInterval(function () {
+            let timer = setInterval(function() {
                 current += increment;
                 if (current >= target) {
                     current = target;
@@ -1306,7 +1310,7 @@ function getStatusDisplay($transaction)
         }
 
         // Keyboard shortcuts
-        $(document).on('keydown', function (e) {
+        $(document).on('keydown', function(e) {
             // Ctrl + P for print
             if (e.ctrlKey && e.key === 'p') {
                 e.preventDefault();
@@ -1329,14 +1333,14 @@ function getStatusDisplay($transaction)
         }
 
         // Accessibility improvements
-        $('button[title]').attr('aria-label', function () {
+        $('button[title]').attr('aria-label', function() {
             return $(this).attr('title');
         });
 
         // Form validation helpers (if needed for future forms)
         function validateForm(formId) {
             let isValid = true;
-            $(formId + ' [required]').each(function () {
+            $(formId + ' [required]').each(function() {
                 if (!$(this).val()) {
                     $(this).addClass('is-invalid');
                     isValid = false;
@@ -1366,8 +1370,8 @@ function getStatusDisplay($transaction)
             $('.alert-container').append(notification);
 
             // Auto remove after 5 seconds
-            setTimeout(function () {
-                $('.alert-container .alert').last().fadeOut('slow', function () {
+            setTimeout(function() {
+                $('.alert-container .alert').last().fadeOut('slow', function() {
                     $(this).remove();
                 });
             }, 5000);
@@ -1412,7 +1416,6 @@ function getStatusDisplay($transaction)
         console.log('🚀 Transaction Management System Loaded');
         console.log('📊 Total Transactions Ready to Ship:', totalTransactions);
         console.log('🔧 DataTable initialized with responsive design');
-
     </script>
 
     <!-- Additional CSS for better mobile responsiveness -->

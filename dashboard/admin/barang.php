@@ -107,7 +107,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             header("Location: " . $_SERVER['PHP_SELF']);
             exit();
-
         } catch (Exception $e) {
             $_SESSION['alert_message'] = 'Terjadi kesalahan: ' . $e->getMessage();
             $_SESSION['alert_type'] = 'danger';
@@ -622,7 +621,7 @@ $barangs = $stmt->fetchAll();
 
     <script>
         // Initialize DataTable with enhanced features
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Destroy existing DataTable if it exists
             if ($.fn.DataTable.isDataTable('#table-1')) {
                 $('#table-1').DataTable().destroy();
@@ -630,14 +629,24 @@ $barangs = $stmt->fetchAll();
 
             // Initialize new DataTable with enhanced styling
             $("#table-1").DataTable({
-                "columnDefs": [
-                    { "orderable": false, "targets": [1, 8] }, // Photo and Action columns
-                    { "className": "text-center", "targets": [0, 8] }
+                "columnDefs": [{
+                        "orderable": false,
+                        "targets": [1, 8]
+                    }, // Photo and Action columns
+                    {
+                        "className": "text-center",
+                        "targets": [0, 8]
+                    }
                 ],
                 "responsive": true,
                 "pageLength": 10,
-                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "Semua"]],
-                "order": [[5, "desc"]], // Sort by created_at descending
+                "lengthMenu": [
+                    [5, 10, 25, 50, -1],
+                    [5, 10, 25, 50, "Semua"]
+                ],
+                "order": [
+                    [5, "desc"]
+                ], // Sort by created_at descending
                 "language": {
                     "lengthMenu": "Tampilkan _MENU_ data per halaman",
                     "zeroRecords": "Data tidak ditemukan",
@@ -656,7 +665,7 @@ $barangs = $stmt->fetchAll();
                     "loadingRecords": "⏳ Memuat data..."
                 },
                 "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
-                "drawCallback": function (settings) {
+                "drawCallback": function(settings) {
                     // Add animation to table rows
                     $('.table tbody tr').addClass('animate__animated animate__fadeIn');
                 }
@@ -704,7 +713,7 @@ $barangs = $stmt->fetchAll();
                 }
 
                 const reader = new FileReader();
-                reader.onload = function (e) {
+                reader.onload = function(e) {
                     preview.attr('src', e.target.result).show().addClass('animate__animated animate__zoomIn');
                 }
                 reader.readAsDataURL(file);
@@ -715,6 +724,9 @@ $barangs = $stmt->fetchAll();
 
         // Enhanced edit barang function
         function editBarang(barang) {
+            if (Swal.isVisible()) {
+                Swal.close();
+            }
             $('#edit_id_barang').val(barang.id_barang);
             $('#edit_nama_barang').val(barang.nama_barang);
             $('#edit_deskripsi_barang').val(barang.deskripsi_barang);
@@ -740,6 +752,9 @@ $barangs = $stmt->fetchAll();
 
         // Enhanced view barang function
         function viewBarang(barang) {
+            if (Swal.isVisible()) {
+                Swal.close();
+            }
             $('#viewNamaBarang').text(barang.nama_barang);
             $('#viewNamaBarangDetail').text(barang.nama_barang);
             $('#viewDeskripsiDetail').text(barang.deskripsi_barang);
@@ -774,26 +789,61 @@ $barangs = $stmt->fetchAll();
 
         // Enhanced delete barang function with SweetAlert2
         function deleteBarang(id, namaBarang) {
-            Swal.fire({
-                title: '⚠️ Konfirmasi Hapus',
-                html: `Apakah Anda yakin ingin menghapus barang:<br><strong class="text-danger">${namaBarang}</strong>?`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: '🗑️ Ya, Hapus!',
-                cancelButtonText: '❌ Batal',
-                reverseButtons: true,
-                customClass: {
-                    popup: 'animate__animated animate__zoomIn'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $('#delete_id_barang').val(id);
-                    $('#delete_nama_barang').text(namaBarang);
-                    $('#deleteModal').modal('show');
-                }
-            });
+            $('.modal').modal('hide');
+            setTimeout(() => {
+                Swal.fire({
+                    title: '⚠️ Konfirmasi Hapus',
+                    html: `Apakah Anda yakin ingin menghapus barang:<br><strong class="text-danger">${namaBarang}</strong>?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: '🗑️ Ya, Hapus!',
+                    cancelButtonText: '❌ Batal',
+                    reverseButtons: true,
+                    allowOutsideClick: false,
+                    allowEscapeKey: true,
+                    stopKeydownPropagation: false,
+                    customClass: {
+                        popup: 'animate__animated animate__zoomIn'
+                    },
+                    // Improved event handling
+                    didOpen: () => {
+                        // Ensure proper focus and keyboard handling
+                        const popup = Swal.getPopup();
+                        if (popup) {
+                            popup.setAttribute('tabindex', '-1');
+                            popup.focus();
+                        }
+                    },
+                    willClose: () => {
+                        // Cleanup when closing
+                        $('.swal2-backdrop-show').remove();
+                        $('body').removeClass('swal2-shown swal2-no-backdrop');
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#delete_id_barang').val(id);
+                        $('#delete_nama_barang').text(namaBarang);
+                        $('#deleteModal').modal('show');
+                    }
+                    cleanupSweetAlert();
+                }).catch((error) => {
+                    // Handle error dan cleanup
+                    console.log('SweetAlert error:', error);
+                    cleanupSweetAlert();
+                });
+            }, 100);
+        }
+
+        // Helper function untuk membersihkan SweetAlert
+        function cleanupSweetAlert() {
+            setTimeout(() => {
+                $('.swal2-backdrop-show').remove();
+                $('.swal2-container').remove();
+                $('body').removeClass('swal2-shown swal2-no-backdrop');
+                $('body').css('padding-right', '');
+            }, 50);
         }
 
         // Form validation enhancement
@@ -801,7 +851,7 @@ $barangs = $stmt->fetchAll();
             const form = $(formId);
             let isValid = true;
 
-            form.find('input[required], select[required], textarea[required]').each(function () {
+            form.find('input[required], select[required], textarea[required]').each(function() {
                 if (!$(this).val()) {
                     $(this).addClass('is-invalid');
                     isValid = false;
@@ -814,28 +864,28 @@ $barangs = $stmt->fetchAll();
         }
 
         // Auto hide alerts with enhanced animation
-        setTimeout(function () {
+        setTimeout(function() {
             $('.alert').addClass('animate__animated animate__fadeOutRight');
-            setTimeout(function () {
+            setTimeout(function() {
                 $('.alert').remove();
             }, 1000);
         }, 5000);
 
         // Add hover effects to table rows
-        $(document).on('mouseenter', '.table tbody tr', function () {
+        $(document).on('mouseenter', '.table tbody tr', function() {
             $(this).addClass('table-active');
-        }).on('mouseleave', '.table tbody tr', function () {
+        }).on('mouseleave', '.table tbody tr', function() {
             $(this).removeClass('table-active');
         });
 
         // Enhanced file upload drag and drop
-        $('.custom-file-upload').on('dragover', function (e) {
+        $('.custom-file-upload').on('dragover', function(e) {
             e.preventDefault();
             $(this).addClass('border-primary bg-light');
-        }).on('dragleave', function (e) {
+        }).on('dragleave', function(e) {
             e.preventDefault();
             $(this).removeClass('border-primary bg-light');
-        }).on('drop', function (e) {
+        }).on('drop', function(e) {
             e.preventDefault();
             $(this).removeClass('border-primary bg-light');
 
@@ -848,7 +898,7 @@ $barangs = $stmt->fetchAll();
         });
 
         // Add success animation for form submissions
-        $('form').on('submit', function () {
+        $('form').on('submit', function() {
             const submitBtn = $(this).find('button[type=submit]');
             const originalText = submitBtn.html();
 
@@ -859,7 +909,7 @@ $barangs = $stmt->fetchAll();
         });
 
         // Add loading animation to buttons
-        $('.btn').on('click', function () {
+        $('.btn').on('click', function() {
             if ($(this).attr('type') === 'submit') {
                 const originalText = $(this).html();
                 $(this).html('<i class="fas fa-spinner fa-spin mr-1"></i>Loading...');
@@ -871,27 +921,40 @@ $barangs = $stmt->fetchAll();
         });
 
         // Initialize animate.css classes
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('.card').addClass('animate__animated animate__fadeInUp');
             $('.alert').addClass('animate__animated animate__slideInRight');
         });
 
-        // Add keyboard shortcuts
-        $(document).keydown(function (e) {
-            // Ctrl + N for new barang
-            if (e.ctrlKey && e.keyCode === 78) {
-                e.preventDefault();
-                $('#addModal').modal('show');
-            }
+        // FIXED: Improved keyboard shortcuts without conflict
+        $(document).keydown(function(e) {
+            // Cek apakah SweetAlert sedang aktif
+            if (Swal.isVisible()) {
+                if (e.keyCode === 27) { // ESC key
+                    e.preventDefault();
+                    e.stopPropagation();
+                    Swal.close();
+                    cleanupSweetAlert();
+                    return false;
+                }
+            } else {
+                // Keyboard shortcuts hanya aktif jika SweetAlert tidak terlihat
 
-            // ESC to close modals
-            if (e.keyCode === 27) {
-                $('.modal').modal('hide');
+                // Ctrl + N for new barang
+                if (e.ctrlKey && e.keyCode === 78) {
+                    e.preventDefault();
+                    $('#addModal').modal('show');
+                }
+
+                // ESC to close modals (hanya modal Bootstrap)
+                if (e.keyCode === 27) {
+                    $('.modal').modal('hide');
+                }
             }
         });
 
         // Add search highlight functionality
-        $('#table-1').on('draw.dt', function () {
+        $('#table-1').on('draw.dt', function() {
             const searchTerm = $('.dataTables_filter input').val();
             if (searchTerm) {
                 $('.table tbody').highlight(searchTerm);
@@ -899,25 +962,25 @@ $barangs = $stmt->fetchAll();
         });
 
         // Reset form when modal is closed
-        $('.modal').on('hidden.bs.modal', function () {
+        $('.modal').on('hidden.bs.modal', function() {
             $(this).find('form')[0].reset();
             $(this).find('.is-invalid, .is-valid').removeClass('is-invalid is-valid');
             $(this).find('img[id$="Preview"]').hide();
         });
 
         // Reset add modal when opened
-        $('#addModal').on('shown.bs.modal', function () {
+        $('#addModal').on('shown.bs.modal', function() {
             $('#addPreview').hide();
             $(this).find('input[name="nama_barang"]').focus();
         });
 
         // Reset edit modal when opened
-        $('#editModal').on('shown.bs.modal', function () {
+        $('#editModal').on('shown.bs.modal', function() {
             $(this).find('input[name="nama_barang"]').focus();
         });
 
         // Add real-time validation
-        $('input[required], textarea[required]').on('blur', function () {
+        $('input[required], textarea[required]').on('blur', function() {
             if ($(this).val()) {
                 $(this).removeClass('is-invalid').addClass('is-valid');
             } else {
@@ -927,7 +990,7 @@ $barangs = $stmt->fetchAll();
 
         // Stock warning alert
         function checkStockLevels() {
-            $('.table tbody tr').each(function () {
+            $('.table tbody tr').each(function() {
                 const stockBadge = $(this).find('td:nth-child(6) .badge'); // Kolom stock (ke-5)
 
                 if (stockBadge.length > 0) {
@@ -950,7 +1013,7 @@ $barangs = $stmt->fetchAll();
         }
 
         // Call stock check on page load
-        $(document).ready(function () {
+        $(document).ready(function() {
             setTimeout(checkStockLevels, 1000);
         });
 
