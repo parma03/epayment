@@ -81,7 +81,7 @@ if ($_POST) {
                     $_SESSION['alert_title'] = 'Berhasil!';
                     $_SESSION['alert_icon'] = 'fas fa-check-circle';
 
-                    header("Location: index.php");
+                    header("Location: login.php");
                     exit();
                 } else {
                     $alert_message = 'Terjadi kesalahan saat registrasi. Silakan coba lagi.';
@@ -236,7 +236,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
 
                                     <div class="text-center">
                                         <p class="mb-0">Sudah punya akun?
-                                            <a href="index.php" class="text-primary font-weight-bold">Login di sini</a>
+                                            <a href="login.php" class="text-primary font-weight-bold">Login di sini</a>
                                         </p>
                                     </div>
                                 </form>
@@ -274,9 +274,9 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
 
     <!-- Custom Validation Script -->
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Real-time password confirmation validation
-            $('#password2').on('keyup', function () {
+            $('#password2').on('keyup', function() {
                 var password = $('#password').val();
                 var confirmPassword = $(this).val();
 
@@ -292,7 +292,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
             });
 
             // Form validation
-            $('#registerForm').on('submit', function (e) {
+            $('#registerForm').on('submit', function(e) {
                 var isValid = true;
                 var email = $('#email').val();
                 var password = $('#password').val();
@@ -339,7 +339,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
             }
 
             // Auto hide alerts after 5 seconds
-            setTimeout(function () {
+            setTimeout(function() {
                 $('.alert').fadeOut('slow');
             }, 5000);
         });
