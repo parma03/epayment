@@ -55,7 +55,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no" name="viewport">
-    <title>Katalog Produk &mdash; Toko Online</title>
+    <title>Katalog Produk &mdash; Syania furniture</title>
 
     <!-- General CSS Files -->
     <link rel="stylesheet" href="../../assets/modules/bootstrap/css/bootstrap.min.css">
@@ -256,7 +256,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
     <nav class="navbar navbar-expand-lg navbar-custom">
         <div class="container-fluid">
             <a class="navbar-brand" href="index.php">
-                <i class="fas fa-store"></i> Toko Online
+                <i class="fas fa-store"></i> Syania furniture
             </a>
 
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
@@ -281,7 +281,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
         <div class="container">
             <div class="row">
                 <div class="col-12 text-center">
-                    <h1 class="display-4 mb-4">Selamat Datang di Toko Online Kami</h1>
+                    <h1 class="display-4 mb-4">Selamat Datang di Toko Syania furniture</h1>
                     <p class="lead mb-4">Temukan produk berkualitas dengan harga terbaik</p>
 
                     <!-- Search Box -->
@@ -414,6 +414,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
                 <div class="col-lg-8 mx-auto text-center">
                     <h2 class="mb-4">Tentang Kami</h2>
                     <p class="lead">
+                        Syania furniture, <br>
                         Kami adalah toko online terpercaya yang menyediakan berbagai produk berkualitas
                         dengan harga yang kompetitif. Kepuasan pelanggan adalah prioritas utama kami.
                     </p>
@@ -455,11 +456,11 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
-                    <h5>Toko Online</h5>
+                    <h5>Syania furniture</h5>
                     <p>Platform e-commerce terpercaya untuk semua kebutuhan Anda.</p>
                 </div>
                 <div class="col-md-6 text-md-right">
-                    <p>&copy; <?php echo date('Y'); ?> Toko Online. All rights reserved.</p>
+                    <p>&copy; <?php echo date('Y'); ?> Syania furniture. All rights reserved.</p>
                 </div>
             </div>
         </div>
