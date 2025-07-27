@@ -175,7 +175,7 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
                             </div>
 
                             <div class="card-body">
-                                <form method="POST" action="index.php" class="needs-validation" novalidate="">
+                                <form method="POST" action="login.php" class="needs-validation" novalidate="">
                                     <div class="form-group">
                                         <label for="email">Email</label>
                                         <input id="email" type="email" class="form-control" name="email" tabindex="1"

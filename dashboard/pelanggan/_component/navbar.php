@@ -4,6 +4,10 @@ if (isset($_SESSION['id_user'])) {
     $stmt = $pdo->prepare("SELECT * FROM tb_user WHERE id_user = ?");
     $stmt->execute([$_SESSION['id_user']]);
     $user_data = $stmt->fetch();
+
+    $stmt_cart = $pdo->prepare("SELECT SUM(jumlah) as total_items FROM tb_keranjang WHERE id_user = ?");
+    $stmt_cart->execute([$_SESSION['id_user']]);
+    $cart_count = $stmt_cart->fetchColumn() ?: 0;
 }
 ?>
 <nav class="navbar navbar-expand-lg main-navbar">
@@ -13,6 +17,18 @@ if (isset($_SESSION['id_user'])) {
         </ul>
     </form>
     <ul class="navbar-nav navbar-right">
+        <!-- TAMBAHAN: Cart Icon -->
+        <?php if (isset($_SESSION['id_user'])): ?>
+            <li class="nav-item">
+                <a href="#" class="nav-link nav-link-lg" onclick="showCart()" title="Keranjang Belanja">
+                    <i class="fas fa-shopping-cart"></i>
+                    <?php if ($cart_count > 0): ?>
+                        <span class="badge badge-danger badge-pill cart-count" id="cartCount"><?php echo $cart_count; ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+        <?php endif; ?>
+
         <li class="dropdown"><a href="#" data-toggle="dropdown"
                 class="nav-link dropdown-toggle nav-link-lg nav-link-user">
                 <img alt="image"
@@ -35,6 +51,31 @@ if (isset($_SESSION['id_user'])) {
         </li>
     </ul>
 </nav>
+
+<!-- TAMBAHAN: Cart Modal -->
+<div class="modal fade" id="cartModal" tabindex="-1" role="dialog" aria-labelledby="cartModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white" id="cartModalLabel">
+                    <i class="fas fa-shopping-cart mr-2"></i>Keranjang Belanja
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="cartModalBody">
+                <!-- Cart content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                <button type="button" class="btn btn-primary" id="checkoutBtn" onclick="proceedToCheckout()">
+                    <i class="fas fa-credit-card"></i> Checkout
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Profile Modal -->
 <div class="modal fade" id="editProfileModal" tabindex="-1" role="dialog" aria-labelledby="editProfileModalLabel"
@@ -201,7 +242,7 @@ if (isset($_SESSION['id_user'])) {
     function previewImage(input) {
         if (input.files && input.files[0]) {
             const reader = new FileReader();
-            reader.onload = function (e) {
+            reader.onload = function(e) {
                 document.getElementById('currentProfilePhoto').src = e.target.result;
             };
             reader.readAsDataURL(input.files[0]);
@@ -225,7 +266,7 @@ if (isset($_SESSION['id_user'])) {
     }
 
     // Form validation
-    document.getElementById('editProfileForm').addEventListener('submit', function (e) {
+    document.getElementById('editProfileForm').addEventListener('submit', function(e) {
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
         const currentPassword = document.getElementById('current_password').value;
@@ -278,7 +319,7 @@ if (isset($_SESSION['id_user'])) {
     });
 
     // Reset form when modal is closed
-    $('#editProfileModal').on('hidden.bs.modal', function () {
+    $('#editProfileModal').on('hidden.bs.modal', function() {
         const form = document.getElementById('editProfileForm');
         form.reset();
         // Reset image preview
@@ -287,6 +328,21 @@ if (isset($_SESSION['id_user'])) {
 </script>
 
 <style>
+    .cart-count {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        font-size: 0.75rem;
+        min-width: 18px;
+        height: 18px;
+        line-height: 18px;
+        text-align: center;
+    }
+
+    .nav-link {
+        position: relative;
+    }
+
     /* Additional styles for the edit profile modal */
     .modal-dialog {
         max-width: 800px;
