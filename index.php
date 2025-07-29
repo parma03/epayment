@@ -58,16 +58,16 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
     <title>Katalog Produk &mdash; Syania furniture</title>
 
     <!-- General CSS Files -->
-    <link rel="stylesheet" href="../../assets/modules/bootstrap/css/bootstrap.min.css">
-    <link rel="stylesheet" href="../../assets/modules/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="assets/modules/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/modules/fontawesome/css/all.min.css">
 
     <!-- CSS Libraries -->
-    <link rel="stylesheet" href="../../assets/modules/owlcarousel2/dist/assets/owl.carousel.min.css">
-    <link rel="stylesheet" href="../../assets/modules/owlcarousel2/dist/assets/owl.theme.default.min.css">
+    <link rel="stylesheet" href="assets/modules/owlcarousel2/dist/assets/owl.carousel.min.css">
+    <link rel="stylesheet" href="assets/modules/owlcarousel2/dist/assets/owl.theme.default.min.css">
 
     <!-- Template CSS -->
-    <link rel="stylesheet" href="../../assets/css/style.css">
-    <link rel="stylesheet" href="../../assets/css/components.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/components.css">
 
     <!-- Custom CSS -->
     <style>
@@ -363,10 +363,10 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
                                 <div class="position-relative">
                                     <div class="product-image">
                                         <?php if (!empty($item['photo_barang'])): ?>
-                                            <img src="../../assets/img/products/<?php echo $item['photo_barang']; ?>"
+                                            <img src="assets/img/products/<?php echo $item['photo_barang']; ?>"
                                                 alt="<?php echo htmlspecialchars($item['nama_barang']); ?>">
                                         <?php else: ?>
-                                            <img src="../../assets/img/products/product-1.png" alt="No Image">
+                                            <img src="assets/img/products/product-1.png" alt="No Image">
                                         <?php endif; ?>
                                     </div>
                                     <span class="badge badge-primary stock-badge">
@@ -490,20 +490,20 @@ unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_titl
     </div>
 
     <!-- General JS Scripts -->
-    <script src="../../assets/modules/jquery.min.js"></script>
-    <script src="../../assets/modules/popper.js"></script>
-    <script src="../../assets/modules/tooltip.js"></script>
-    <script src="../../assets/modules/bootstrap/js/bootstrap.min.js"></script>
-    <script src="../../assets/modules/nicescroll/jquery.nicescroll.min.js"></script>
-    <script src="../../assets/modules/moment.min.js"></script>
-    <script src="../../assets/js/stisla.js"></script>
+    <script src="assets/modules/jquery.min.js"></script>
+    <script src="assets/modules/popper.js"></script>
+    <script src="assets/modules/tooltip.js"></script>
+    <script src="assets/modules/bootstrap/js/bootstrap.min.js"></script>
+    <script src="assets/modules/nicescroll/jquery.nicescroll.min.js"></script>
+    <script src="assets/modules/moment.min.js"></script>
+    <script src="assets/js/stisla.js"></script>
 
     <!-- JS Libraries -->
-    <script src="../../assets/modules/owlcarousel2/dist/owl.carousel.min.js"></script>
+    <script src="assets/modules/owlcarousel2/dist/owl.carousel.min.js"></script>
 
     <!-- Template JS File -->
-    <script src="../../assets/js/scripts.js"></script>
-    <script src="../../assets/js/custom.js"></script>
+    <script src="assets/js/scripts.js"></script>
+    <script src="assets/js/custom.js"></script>
 
     <script>
         // Search functionality

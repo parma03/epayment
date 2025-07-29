@@ -14,7 +14,19 @@ try {
     $product = $stmt->fetch();
 
     if (!$product) {
+        if ($action === 'add_to_cart') {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Product not found or out of stock']);
+            exit;
+        }
         die('Product not found or out of stock');
+    }
+
+    if ($action === 'add_to_cart') {
+        // Return JSON for add to cart action
+        header('Content-Type: application/json');
+        echo json_encode($product);
+        exit;
     }
 
     if ($action === 'buy') {
@@ -25,15 +37,15 @@ try {
     }
 
     // Return HTML for view action
-    ?>
+?>
     <div class="row">
         <div class="col-md-6">
             <div class="product-image-detail">
                 <?php if (!empty($product['photo_barang'])): ?>
-                    <img src="../../uploads/<?php echo $product['photo_barang']; ?>"
+                    <img src="../../assets/img/products/<?php echo $product['photo_barang']; ?>"
                         alt="<?php echo htmlspecialchars($product['nama_barang']); ?>" class="img-fluid rounded">
                 <?php else: ?>
-                    <img src="../../assets/img/products/product-default.png" alt="No Image" class="img-fluid rounded">
+                    <img src="../../assets/img/products/product-1.png" alt="No Image" class="img-fluid rounded">
                 <?php endif; ?>
             </div>
         </div>
@@ -49,10 +61,9 @@ try {
                 <h5>Deskripsi Produk</h5>
                 <p><?php echo nl2br(htmlspecialchars($product['deskripsi_barang'])); ?></p>
             </div>
-            <div class="product-actions mt-4">
-                <button type="button" class="btn btn-primary btn-lg btn-block"
-                    onclick="$('#productModal').modal('hide'); buyProduct(<?php echo $product['id_barang']; ?>);">
-                    <i class="fas fa-shopping-cart"></i> Beli Sekarang
+            <div class="mt-4">
+                <button type="button" class="btn btn-success btn-lg" onclick="addToCart(<?php echo $product['id_barang']; ?>)">
+                    <i class="fas fa-cart-plus"></i> Tambah ke Keranjang
                 </button>
             </div>
         </div>
@@ -75,9 +86,14 @@ try {
             padding-top: 20px;
         }
     </style>
-    <?php
+<?php
 
 } catch (PDOException $e) {
+    if ($action === 'add_to_cart') {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => $e->getMessage()]);
+        exit;
+    }
     echo "Error: " . $e->getMessage();
 }
 ?>
