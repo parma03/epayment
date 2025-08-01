@@ -30,7 +30,7 @@ if ($_POST && isset($_POST['action']) && $_POST['action'] === 'confirm_delivery'
     try {
         $id_pengiriman = $_POST['id_pengiriman'];
 
-        // Update status pengiriman menjadi 'selesai'
+        // Update status pengiriman menjadi 'terkirim'
         $stmt = $pdo->prepare("UPDATE tb_pengiriman SET id_driver = ?, status = 'terkirim', updated_at = NOW() WHERE id_pengiriman = ?");
         $result = $stmt->execute([$_SESSION['id_user'], $id_pengiriman]);
 
@@ -48,7 +48,6 @@ if ($_POST && isset($_POST['action']) && $_POST['action'] === 'confirm_delivery'
 
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
-
     } catch (Exception $e) {
         $_SESSION['alert_message'] = 'Error: ' . $e->getMessage();
         $_SESSION['alert_type'] = 'danger';
@@ -69,12 +68,14 @@ $alert_icon = isset($_SESSION['alert_icon']) ? $_SESSION['alert_icon'] : '';
 // Hapus alert dari session setelah digunakan
 unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_title'], $_SESSION['alert_icon']);
 
-// Fetch transaksi yang memiliki status pengiriman 'dikirim' atau 'terkirim' dengan JOIN untuk mendapatkan data lengkap
+// Query untuk mengambil data transaksi dengan detail lengkap seperti pada order.php
 $stmt = $pdo->prepare("
-     SELECT 
+    SELECT 
         t.*,
-        b.nama_barang,
-        b.harga_barang,
+        td.nama_barang,
+        td.harga_barang,
+        td.jumlah_beli,
+        td.subtotal,
         b.photo_barang,
         u.email as email_user,
         p.id_pengiriman,
@@ -86,7 +87,8 @@ $stmt = $pdo->prepare("
         driver.email as driver_email,
         gudang.email as gudang_email
     FROM tb_transaksi t
-    LEFT JOIN tb_barang b ON t.id_barang = b.id_barang
+    LEFT JOIN tb_transaksi_detail td ON t.id_transaksi = td.id_transaksi
+    LEFT JOIN tb_barang b ON td.id_barang = b.id_barang
     LEFT JOIN tb_user u ON t.id_user = u.id_user
     INNER JOIN tb_pengiriman p ON t.id_transaksi = p.id_transaksi
     LEFT JOIN tb_user driver ON p.id_driver = driver.id_user
@@ -100,36 +102,55 @@ $stmt->bindParam(':id_user', $_SESSION['id_user'], PDO::PARAM_INT);
 $stmt->execute();
 $transactions = $stmt->fetchAll();
 
+// Group transactions by id_transaksi untuk menggabungkan detail transaksi yang sama
+$grouped_transactions = [];
+foreach ($transactions as $trans) {
+    $trans_id = $trans['id_transaksi'];
+    if (!isset($grouped_transactions[$trans_id])) {
+        $grouped_transactions[$trans_id] = $trans;
+        $grouped_transactions[$trans_id]['items'] = [];
+    }
+    if ($trans['nama_barang']) { // Pastikan ada item
+        $grouped_transactions[$trans_id]['items'][] = [
+            'nama_barang' => $trans['nama_barang'],
+            'harga_barang' => $trans['harga_barang'],
+            'jumlah_beli' => $trans['jumlah_beli'],
+            'subtotal' => $trans['subtotal'],
+            'photo_barang' => $trans['photo_barang']
+        ];
+    }
+}
+
 function getStatusDisplay($transaction)
 {
     if ($transaction['id_gudang'] === null) {
         return [
             'text' => 'DI PROSES',
-            'class' => '',
+            'class' => 'badge-secondary',
             'icon' => 'fas fa-clock'
         ];
     } else if ($transaction['status_pengiriman'] === 'disiapkan') {
         return [
             'text' => 'DISIAPKAN - ' . strtoupper($transaction['gudang_email']),
-            'class' => '',
+            'class' => 'badge-info',
             'icon' => 'fas fa-box'
         ];
     } else if ($transaction['status_pengiriman'] === 'dikirim') {
         return [
             'text' => 'DIKIRIM',
-            'class' => '',
+            'class' => 'badge-warning',
             'icon' => 'fas fa-truck'
         ];
     } else if ($transaction['status_pengiriman'] === 'terkirim') {
         return [
             'text' => 'TERKIRIM',
-            'class' => '',
+            'class' => 'badge-success',
             'icon' => 'fas fa-check'
         ];
     } else {
         return [
             'text' => strtoupper($transaction['status_pengiriman']),
-            'class' => '',
+            'class' => 'badge-secondary',
             'icon' => 'fas fa-question'
         ];
     }
@@ -171,12 +192,57 @@ function getStatusDisplay($transaction)
             color: #28a745;
         }
 
-        . {
+        .order-id {
             font-family: 'Courier New', monospace;
             background: #f8f9fa;
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.85em;
+        }
+
+        .items-list {
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .item-row {
+            border-bottom: 1px solid #f0f0f0;
+            padding: 8px 0;
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        .item-image {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @media print {
@@ -199,6 +265,34 @@ function getStatusDisplay($transaction)
             .no-print {
                 display: none !important;
             }
+        }
+
+        /* Enhanced scrollbar for items list */
+        .items-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .items-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 2px;
+        }
+
+        .items-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+
+        .items-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Item row hover effects */
+        .item-row {
+            transition: background-color 0.2s ease;
+        }
+
+        .item-row:hover {
+            background-color: rgba(0, 123, 255, 0.05);
         }
     </style>
 </head>
@@ -250,12 +344,12 @@ function getStatusDisplay($transaction)
                                         <div class="card-header-action">
                                             <div class="badge badge-info badge-lg">
                                                 <i class="fas fa-truck mr-1"></i>
-                                                Total: <?php echo count($transactions); ?> transaksi dalam pengiriman
+                                                Total: <?php echo count($grouped_transactions); ?> transaksi dalam pengiriman
                                             </div>
                                         </div>
                                     </div>
                                     <div class="card-body">
-                                        <?php if (empty($transactions)): ?>
+                                        <?php if (empty($grouped_transactions)): ?>
                                             <div class="empty-state" data-height="400">
                                                 <div class="empty-state-icon">
                                                     <i class="fas fa-truck"></i>
@@ -275,7 +369,7 @@ function getStatusDisplay($transaction)
                                                             <th><i class="fas fa-user mr-1"></i>Pemesan</th>
                                                             <th><i class="fas fa-phone mr-1"></i>No. HP</th>
                                                             <th><i class="fas fa-map-marker-alt mr-1"></i>Alamat</th>
-                                                            <th><i class="fas fa-shopping-cart mr-1"></i>Qty</th>
+                                                            <th><i class="fas fa-shopping-cart mr-1"></i>Items</th>
                                                             <th><i class="fas fa-money-bill-wave mr-1"></i>Total</th>
                                                             <th><i class="fas fa-shipping-fast mr-1"></i>Status Kirim</th>
                                                             <th><i class="fas fa-calendar mr-1"></i>Tanggal Kirim</th>
@@ -284,26 +378,35 @@ function getStatusDisplay($transaction)
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <?php foreach ($transactions as $index => $trans): ?>
+                                                        <?php $index = 0;
+                                                        foreach ($grouped_transactions as $trans): $index++; ?>
                                                             <tr>
                                                                 <td class="text-center">
                                                                     <span
-                                                                        class="badge badge-secondary"><?php echo $index + 1; ?></span>
+                                                                        class="badge badge-secondary"><?php echo $index; ?></span>
                                                                 </td>
                                                                 <td>
-                                                                    <div class="d-flex align-items-center">
-                                                                        <?php if ($trans['photo_barang']): ?>
-                                                                            <img src="../../assets/img/products/<?php echo $trans['photo_barang']; ?>"
-                                                                                class="product-image mr-2" alt="Product">
-                                                                        <?php else: ?>
-                                                                            <div
-                                                                                class="product-image mr-2 bg-light d-flex align-items-center justify-content-center">
-                                                                                <i class="fas fa-image text-muted"></i>
-                                                                            </div>
+                                                                    <div class="items-list">
+                                                                        <?php if (!empty($trans['items'])): ?>
+                                                                            <?php foreach ($trans['items'] as $item): ?>
+                                                                                <div class="item-row d-flex align-items-center">
+                                                                                    <?php if ($item['photo_barang']): ?>
+                                                                                        <img src="../../assets/img/products/<?php echo $item['photo_barang']; ?>"
+                                                                                            class="item-image mr-2" alt="Product">
+                                                                                    <?php else: ?>
+                                                                                        <div
+                                                                                            class="item-image mr-2 bg-light d-flex align-items-center justify-content-center">
+                                                                                            <i class="fas fa-image text-muted"></i>
+                                                                                        </div>
+                                                                                    <?php endif; ?>
+                                                                                    <div>
+                                                                                        <small><strong><?php echo htmlspecialchars($item['nama_barang'] ?? 'Produk Tidak Ditemukan'); ?></strong></small>
+                                                                                        <br>
+                                                                                        <small class="text-muted"><?php echo $item['jumlah_beli']; ?> x Rp <?php echo number_format($item['harga_barang'], 0, ',', '.'); ?></small>
+                                                                                    </div>
+                                                                                </div>
+                                                                            <?php endforeach; ?>
                                                                         <?php endif; ?>
-                                                                        <div>
-                                                                            <strong><?php echo htmlspecialchars($trans['nama_barang'] ?? 'Produk Tidak Ditemukan'); ?></strong>
-                                                                        </div>
                                                                     </div>
                                                                 </td>
                                                                 <td>
@@ -328,7 +431,9 @@ function getStatusDisplay($transaction)
                                                                     </div>
                                                                 </td>
                                                                 <td>
-                                                                    <span><?php echo $trans['jumlah_beli']; ?> pcs</span>
+                                                                    <span class="badge badge-primary">
+                                                                        <?php echo count($trans['items']); ?> item(s)
+                                                                    </span>
                                                                 </td>
                                                                 <td>
                                                                     <span class="currency">
@@ -340,7 +445,7 @@ function getStatusDisplay($transaction)
                                                                     <?php
                                                                     $statusDisplay = getStatusDisplay($trans);
                                                                     ?>
-                                                                    <span class=" <?php echo $statusDisplay['class']; ?>">
+                                                                    <span class="badge <?php echo $statusDisplay['class']; ?>">
                                                                         <i
                                                                             class="<?php echo $statusDisplay['icon']; ?> mr-1"></i>
                                                                         <?php echo $statusDisplay['text']; ?>
@@ -399,63 +504,6 @@ function getStatusDisplay($transaction)
         </div>
     </div>
 
-    <!-- Modal Assign Driver -->
-    <div class="modal fade" id="assignDriverModal" tabindex="-1" role="dialog" aria-labelledby="assignDriverModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title" id="assignDriverModalLabel">
-                        <i class="fas fa-user-plus mr-2"></i>Tugaskan Driver
-                    </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="text-center mb-3">
-                        <div class="alert alert-warning">
-                            <i class="fas fa-truck mr-2"></i>
-                            Pilih driver untuk mengirim Order ID <strong><span id="assignOrderId"></span></strong>
-                        </div>
-                    </div>
-
-                    <form id="assignDriverForm" method="POST" action="">
-                        <input type="hidden" name="action" value="assign_driver">
-                        <input type="hidden" name="id_pengiriman" id="assignIdPengiriman">
-
-                        <div class="form-group">
-                            <label for="id_driver"><i class="fas fa-user mr-2"></i>Pilih Driver:</label>
-                            <select name="id_driver" id="id_driver" class="form-control" required>
-                                <option value="">-- Pilih Driver --</option>
-                                <?php foreach ($drivers as $driver): ?>
-                                    <option value="<?php echo $driver['id_user']; ?>">
-                                        <?php echo htmlspecialchars($driver['email']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <div class="text-center">
-                            <i class="fas fa-shipping-fast fa-3x text-warning mb-3"></i>
-                            <p class="text-muted">Setelah driver ditugaskan, status akan berubah menjadi
-                                <strong>DIKIRIM</strong>
-                            </p>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-lg" data-dismiss="modal">
-                        <i class="fas fa-times mr-1"></i>Batal
-                    </button>
-                    <button type="submit" form="assignDriverForm" class="btn btn-warning btn-lg">
-                        <i class="fas fa-user-plus mr-1"></i>Tugaskan Driver
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Add Confirmation Modal -->
     <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-labelledby="confirmModalLabel"
         aria-hidden="true">
@@ -479,7 +527,7 @@ function getStatusDisplay($transaction)
                     </div>
                     <div class="text-center">
                         <i class="fas fa-box-open fa-3x text-primary mb-3"></i>
-                        <p class="text-muted">Status pengiriman akan diubah menjadi <strong>SELESAI</strong> dan tidak
+                        <p class="text-muted">Status pengiriman akan diubah menjadi <strong>TERKIRIM</strong> dan tidak
                             dapat dibatalkan.</p>
                     </div>
                 </div>
@@ -520,12 +568,8 @@ function getStatusDisplay($transaction)
                                 <div class="card-header bg-info text-white">
                                     <h6 class="mb-0"><i class="fas fa-box mr-2"></i>Informasi Produk</h6>
                                 </div>
-                                <div class="card-body text-center">
-                                    <img id="viewProductImage" class="img-fluid rounded mb-3"
-                                        style="max-height: 200px; object-fit: cover;" alt="Product">
-                                    <h5 id="viewProductName" class="text-primary"></h5>
-                                    <p class="text-muted mb-2">Harga Satuan:</p>
-                                    <h6 id="viewProductPrice" class="currency"></h6>
+                                <div class="card-body" id="viewProductsList">
+                                    <!-- Products will be populated here -->
                                 </div>
                             </div>
                         </div>
@@ -566,8 +610,8 @@ function getStatusDisplay($transaction)
                                             <table class="table table-borderless">
                                                 <tr>
                                                     <td class="font-weight-bold"><i
-                                                            class="fas fa-shopping-cart text-info mr-2"></i>Jumlah:</td>
-                                                    <td><span id="viewQuantity"
+                                                            class="fas fa-shopping-cart text-info mr-2"></i>Items:</td>
+                                                    <td><span id="viewItemCount"
                                                             class="badge badge-info badge-lg"></span></td>
                                                 </tr>
                                                 <tr>
@@ -609,6 +653,9 @@ function getStatusDisplay($transaction)
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-lg" data-dismiss="modal">
                         <i class="fas fa-times mr-1"></i>Tutup
+                    </button>
+                    <button type="button" class="btn btn-success btn-lg" onclick="printFromModal()">
+                        <i class="fas fa-print mr-1"></i>Cetak Invoice
                     </button>
                 </div>
             </div>
@@ -689,14 +736,8 @@ function getStatusDisplay($transaction)
                                 Keterangan</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td style="padding: 12px; border: 1px solid #ddd;" id="suratJalanProductName">-</td>
-                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;"
-                                id="suratJalanQuantity">-</td>
-                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">Barang dalam kondisi
-                                baik</td>
-                        </tr>
+                    <tbody id="suratJalanItemsTable">
+                        <!-- Items will be populated here -->
                     </tbody>
                 </table>
 
@@ -774,16 +815,8 @@ function getStatusDisplay($transaction)
                             <th style="padding: 12px; text-align: right; border: 1px solid #ddd;">Subtotal</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td style="padding: 12px; border: 1px solid #ddd;" id="printProductName"></td>
-                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;"
-                                id="printProductPrice"></td>
-                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;" id="printQuantity">
-                            </td>
-                            <td style="padding: 12px; text-align: right; border: 1px solid #ddd; font-weight: bold;"
-                                id="printSubtotal"></td>
-                        </tr>
+                    <tbody id="printProductsTable">
+                        <!-- Products will be populated here -->
                     </tbody>
                     <tfoot>
                         <tr style="background: #f8f9fa;">
@@ -827,21 +860,34 @@ function getStatusDisplay($transaction)
         let currentTransactionData = null;
 
         // Initialize DataTable
-        $(document).ready(function () {
+        $(document).ready(function() {
             if ($.fn.DataTable.isDataTable('#table-1')) {
                 $('#table-1').DataTable().destroy();
             }
 
             $("#table-1").DataTable({
-                "columnDefs": [
-                    { "orderable": false, "targets": [1, 10] }, // Image and action columns
-                    { "className": "text-center", "targets": [0, 10] },
-                    { "width": "150px", "targets": [10] } // Action column width
+                "columnDefs": [{
+                        "orderable": false,
+                        "targets": [1, 10]
+                    }, // Image and action columns
+                    {
+                        "className": "text-center",
+                        "targets": [0, 10]
+                    },
+                    {
+                        "width": "150px",
+                        "targets": [10]
+                    } // Action column width
                 ],
                 "responsive": true,
                 "pageLength": 10,
-                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "Semua"]],
-                "order": [[9, "desc"]], // Sort by shipping date descending
+                "lengthMenu": [
+                    [5, 10, 25, 50, -1],
+                    [5, 10, 25, 50, "Semua"]
+                ],
+                "order": [
+                    [9, "desc"]
+                ], // Sort by shipping date descending
                 "language": {
                     "lengthMenu": "Tampilkan _MENU_ data per halaman",
                     "zeroRecords": "Data tidak ditemukan",
@@ -872,170 +918,205 @@ function getStatusDisplay($transaction)
             $('#confirmModal').modal('show');
         }
 
-        // Function to show assign driver modal
-        function assignDriver(idPengiriman, orderId) {
-            $('#assignIdPengiriman').val(idPengiriman);
-            $('#assignOrderId').text(orderId);
-            $('#id_driver').val(''); // Reset dropdown
-            $('#assignDriverModal').modal('show');
-        }
-
         // Function to print surat jalan
         function printSuratJalan(transaction) {
+            // Populate data surat jalan terlebih dahulu
             populateSuratJalanData(transaction);
 
-            // Sembunyikan semua konten kecuali surat jalan template
-            const originalDisplay = [];
-            document.querySelectorAll('body > *:not(#suratJalanTemplate)').forEach((element, index) => {
-                originalDisplay[index] = element.style.display;
-                element.style.display = 'none';
-            });
+            // Buat window baru untuk pencetakan
+            let printWindow = window.open('', '_blank', 'width=800,height=600');
 
-            // Tampilkan surat jalan template
-            document.getElementById('suratJalanTemplate').style.display = 'block';
+            // Ambil konten surat jalan
+            let suratJalanContent = document.getElementById('suratJalanTemplate').innerHTML;
 
-            // Print
-            window.print();
+            // Buat HTML lengkap untuk window baru
+            let printHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Surat Jalan - ${transaction.order_id}</title>
+            <style>
+                body { 
+                    margin: 0; 
+                    padding: 20px; 
+                    font-family: Arial, sans-serif; 
+                    background: white; 
+                    color: #333; 
+                }
+                
+                @media print {
+                    body { margin: 0; padding: 15px; }
+                    .no-print { display: none !important; }
+                }
+                
+                table { 
+                    border-collapse: collapse; 
+                    width: 100%; 
+                }
+                
+                table td, table th { 
+                    border: 1px solid #ddd; 
+                    padding: 8px; 
+                    text-align: left; 
+                }
+                
+                table th { 
+                    background-color: #333; 
+                    color: white; 
+                }
+                
+                .text-center { text-align: center; }
+                .font-weight-bold { font-weight: bold; }
+                
+                /* Print button style */
+                .print-btn {
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    padding: 10px 15px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    z-index: 1000;
+                }
+                
+                .print-btn:hover {
+                    background: #0056b3;
+                }
+                
+                @media print {
+                    .print-btn { display: none; }
+                }
+            </style>
+        </head>
+        <body>
+            <button class="print-btn no-print" onclick="window.print()">🖨️ Cetak</button>
+            ${suratJalanContent}
+        </body>
+        </html>
+    `;
 
-            // Kembalikan tampilan semula setelah print
+            // Tulis HTML ke window baru
+            printWindow.document.write(printHTML);
+            printWindow.document.close();
+
+            // Tunggu sebentar lalu fokus ke window baru
             setTimeout(() => {
-                document.getElementById('suratJalanTemplate').style.display = 'none';
-                document.querySelectorAll('body > *:not(#suratJalanTemplate)').forEach((element, index) => {
-                    element.style.display = originalDisplay[index];
-                });
+                printWindow.focus();
+
+                // Auto print setelah 500ms
+                setTimeout(() => {
+                    printWindow.print();
+                }, 500);
             }, 100);
         }
-        const suratJalanStyles = `
-<style>
-/* Surat Jalan Print Styles */
-@media print {
-    .surat-jalan-print {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: white !important;
-    }
-    
-    .surat-jalan-print * {
-        visibility: visible !important;
-    }
-    
-    .surat-jalan-print table {
-        page-break-inside: avoid;
-    }
-    
-    .surat-jalan-print .signature-section {
-        page-break-inside: avoid;
-    }
-    
-    /* Hide everything else when printing surat jalan */
-    body.printing-surat-jalan > *:not(#suratJalanTemplate) {
-        display: none !important;
-    }
-    
-    body.printing-surat-jalan #suratJalanTemplate {
-        display: block !important;
-    }
-}
 
-/* Enhanced surat jalan template styles */
-#suratJalanTemplate {
-    display: none;
-}
-
-#suratJalanTemplate .surat-jalan-print {
-    font-family: Arial, sans-serif;
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    color: #333;
-}
-
-#suratJalanTemplate .signature-section {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 50px;
-}
-
-#suratJalanTemplate .signature-box {
-    text-align: center;
-    width: 200px;
-}
-
-#suratJalanTemplate .signature-line {
-    border-top: 1px solid #333;
-    padding-top: 5px;
-    margin-top: 60px;
-}
-</style>
-`;
         // Function to populate surat jalan data
         function populateSuratJalanData(transaction) {
-            // Generate surat jalan number
-            let suratJalanNo = 'SJ-' + transaction.order_id + '-' + new Date().getTime();
+            try {
+                // Generate surat jalan number
+                let now = new Date();
+                let suratJalanNo = 'SJ-' + transaction.order_id + '-' + now.getFullYear() +
+                    (now.getMonth() + 1).toString().padStart(2, '0') +
+                    now.getDate().toString().padStart(2, '0');
 
-            $('#suratJalanNo').text(suratJalanNo);
-            $('#suratJalanOrderId').text(transaction.order_id);
-            $('#suratJalanDate').text(new Date().toLocaleDateString('id-ID'));
-            $('#suratJalanDriver').text(transaction.driver_email || 'Driver tidak tersedia');
-            $('#suratJalanCustomerName').text(transaction.nama_pemesan);
-            $('#suratJalanCustomerPhone').text(transaction.nohp_pemesan);
-            $('#suratJalanAddress').text(transaction.alamat_pemesan);
-            $('#suratJalanProductName').text(transaction.nama_barang || 'Produk Tidak Ditemukan');
-            $('#suratJalanQuantity').text(transaction.jumlah_beli + ' pcs');
-            $('#suratJalanDriverSign').text(transaction.driver_email || 'Driver');
-            $('#suratJalanReceiverSign').text(transaction.nama_pemesan);
-            $('#suratJalanPrintTime').text(new Date().toLocaleString('id-ID'));
+                // Populate data dengan pengecekan null/undefined
+                document.getElementById('suratJalanNo').textContent = suratJalanNo;
+                document.getElementById('suratJalanOrderId').textContent = transaction.order_id || 'N/A';
+                document.getElementById('suratJalanDate').textContent = now.toLocaleDateString('id-ID');
+                document.getElementById('suratJalanDriver').textContent = transaction.driver_email || 'Driver tidak tersedia';
+                document.getElementById('suratJalanCustomerName').textContent = transaction.nama_pemesan || 'N/A';
+                document.getElementById('suratJalanCustomerPhone').textContent = transaction.nohp_pemesan || 'N/A';
+                document.getElementById('suratJalanAddress').textContent = transaction.alamat_pemesan || 'Alamat tidak tersedia';
+                document.getElementById('suratJalanDriverSign').textContent = transaction.driver_email || 'Driver';
+                document.getElementById('suratJalanReceiverSign').textContent = transaction.nama_pemesan || 'Penerima';
+                document.getElementById('suratJalanPrintTime').textContent = now.toLocaleString('id-ID');
+
+                // Populate items table untuk surat jalan
+                let itemsTableHtml = '';
+                if (transaction.items && Array.isArray(transaction.items) && transaction.items.length > 0) {
+                    transaction.items.forEach(function(item, index) {
+                        itemsTableHtml += `
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #ddd;">
+                            ${item.nama_barang || 'Produk Tidak Ditemukan'}
+                        </td>
+                        <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">
+                            ${item.jumlah_beli || 0} pcs
+                        </td>
+                        <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">
+                            Barang dalam kondisi baik
+                        </td>
+                    </tr>
+                `;
+                    });
+                } else {
+                    itemsTableHtml = `
+                <tr>
+                    <td colspan="3" style="padding: 12px; text-align: center; border: 1px solid #ddd;">
+                        Tidak ada item ditemukan
+                    </td>
+                </tr>
+            `;
+                }
+
+                document.getElementById('suratJalanItemsTable').innerHTML = itemsTableHtml;
+
+                console.log('Surat jalan data populated successfully:', {
+                    orderId: transaction.order_id,
+                    itemsCount: transaction.items ? transaction.items.length : 0
+                });
+
+            } catch (error) {
+                console.error('Error populating surat jalan data:', error);
+                alert('Terjadi kesalahan saat mempersiapkan data surat jalan: ' + error.message);
+            }
         }
-
         // Function to view transaction details
         function viewTransaction(transaction) {
             currentTransactionData = transaction;
 
             // Set product information
-            if (transaction.photo_barang) {
-                $('#viewProductImage').attr('src', '../../assets/img/products/' + transaction.photo_barang);
-            } else {
-                $('#viewProductImage').attr('src', '../../assets/img/no-image.png');
-            }
+            let productsHtml = '';
+            if (transaction.items && transaction.items.length > 0) {
+                transaction.items.forEach(function(item) {
+                    let imageHtml = '';
+                    if (item.photo_barang) {
+                        imageHtml = `<img src="../../assets/img/products/${item.photo_barang}" class="img-fluid rounded mb-2" style="max-height: 100px; object-fit: cover;" alt="Product">`;
+                    } else {
+                        imageHtml = '<div class="bg-light p-3 rounded mb-2 text-center"><i class="fas fa-image text-muted"></i></div>';
+                    }
 
-            $('#viewProductName').text(transaction.nama_barang || 'Produk Tidak Ditemukan');
-            $('#viewProductPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.harga_barang || 0));
+                    productsHtml += `
+                        <div class="mb-3 pb-3 border-bottom">
+                            ${imageHtml}
+                            <h6 class="text-primary">${item.nama_barang || 'Produk Tidak Ditemukan'}</h6>
+                            <p class="text-muted mb-1">Harga: Rp ${new Intl.NumberFormat('id-ID').format(item.harga_barang || 0)}</p>
+                            <p class="text-muted mb-1">Jumlah: ${item.jumlah_beli} pcs</p>
+                            <p class="font-weight-bold text-success">Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(item.subtotal || 0)}</p>
+                        </div>
+                    `;
+                });
+            }
+            $('#viewProductsList').html(productsHtml);
 
             // Set order information
             $('#viewOrderId').text(transaction.order_id);
             $('#viewCustomerName').text(transaction.nama_pemesan);
             $('#viewCustomerEmail').text(transaction.email_user || 'Email tidak tersedia');
             $('#viewCustomerPhone').text(transaction.nohp_pemesan);
-            $('#viewQuantity').text(transaction.jumlah_beli + ' pcs');
+            $('#viewItemCount').text((transaction.items ? transaction.items.length : 0) + ' item(s)');
             $('#viewTotalPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.total_harga));
             $('#viewOrderDate').text(new Date(transaction.created_at).toLocaleString('id-ID'));
             $('#viewShippingAddress').text(transaction.alamat_pemesan);
 
-            // Set shipping status
-            let shippingStatus = transaction.status_pengiriman.toUpperCase();
-            let statusClass = '';
-            let statusIcon = '';
-
-            switch (transaction.status_pengiriman) {
-                case 'dikirim':
-                    statusClass = 'badge-warning';
-                    statusIcon = 'fas fa-truck';
-                    break;
-                case 'terkirim':
-                    statusClass = 'badge-info';
-                    statusIcon = 'fas fa-box';
-                    break;
-                default:
-                    statusClass = 'badge-secondary';
-                    statusIcon = 'fas fa-question';
-            }
-
-            $('#viewPaymentStatus').removeClass().addClass('badge ' + statusClass).html('<i class="' + statusIcon + ' mr-1"></i>' + shippingStatus);
-
             $('#viewModal').modal('show');
         }
 
-        $('#confirmForm').on('submit', function (e) {
+        $('#confirmForm').on('submit', function(e) {
             let submitBtn = $(this).find('button[type="submit"]');
             let originalText = submitBtn.html();
 
@@ -1043,31 +1124,7 @@ function getStatusDisplay($transaction)
             submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses...');
 
             // Allow form to submit naturally
-            setTimeout(function () {
-                if (submitBtn.length) {
-                    submitBtn.prop('disabled', false);
-                    submitBtn.html(originalText);
-                }
-            }, 3000);
-        });
-
-        // Handle assign driver form submission
-        $('#assignDriverForm').on('submit', function (e) {
-            let submitBtn = $(this).find('button[type="submit"]');
-            let originalText = submitBtn.html();
-
-            // Validation
-            if (!$('#id_driver').val()) {
-                e.preventDefault();
-                alert('Silakan pilih driver terlebih dahulu!');
-                return false;
-            }
-
-            submitBtn.prop('disabled', true);
-            submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Menugaskan...');
-
-            // Allow form to submit naturally
-            setTimeout(function () {
+            setTimeout(function() {
                 if (submitBtn.length) {
                     submitBtn.prop('disabled', false);
                     submitBtn.html(originalText);
@@ -1097,25 +1154,38 @@ function getStatusDisplay($transaction)
             $('#printCustomerEmail').text(transaction.email_user || 'Email tidak tersedia');
             $('#printCustomerPhone').text(transaction.nohp_pemesan);
             $('#printShippingAddress').text(transaction.alamat_pemesan);
-            $('#printProductName').text(transaction.nama_barang || 'Produk Tidak Ditemukan');
-            $('#printProductPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.harga_barang || 0));
-            $('#printQuantity').text(transaction.jumlah_beli + ' pcs');
-            $('#printSubtotal').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.total_harga));
+
+            // Populate products table
+            let productsTableHtml = '';
+            if (transaction.items && transaction.items.length > 0) {
+                transaction.items.forEach(function(item) {
+                    productsTableHtml += `
+                        <tr>
+                            <td style="padding: 12px; border: 1px solid #ddd;">${item.nama_barang || 'Produk Tidak Ditemukan'}</td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">Rp ${new Intl.NumberFormat('id-ID').format(item.harga_barang || 0)}</td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">${item.jumlah_beli} pcs</td>
+                            <td style="padding: 12px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Rp ${new Intl.NumberFormat('id-ID').format(item.subtotal || 0)}</td>
+                        </tr>
+                    `;
+                });
+            }
+            $('#printProductsTable').html(productsTableHtml);
+
             $('#printTotalPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.total_harga));
             $('#printDateTime').text(new Date().toLocaleString('id-ID'));
         }
 
         // Auto hide alert after 5 seconds
-        setTimeout(function () {
+        setTimeout(function() {
             $('.alert-container .alert').fadeOut('slow');
         }, 5000);
 
         // Enhance table with hover effects
-        $('#table-1 tbody').on('mouseenter', 'tr', function () {
+        $('#table-1 tbody').on('mouseenter', 'tr', function() {
             $(this).addClass('table-active');
         });
 
-        $('#table-1 tbody').on('mouseleave', 'tr', function () {
+        $('#table-1 tbody').on('mouseleave', 'tr', function() {
             $(this).removeClass('table-active');
         });
 
@@ -1126,10 +1196,9 @@ function getStatusDisplay($transaction)
         });
 
         // Format currency on page load
-        $('.currency').each(function () {
+        $('.currency').each(function() {
             let text = $(this).text();
             if (text.includes('Rp')) {
-                // Already formatted
                 return;
             }
             let number = parseFloat(text.replace(/[^\d.-]/g, ''));
@@ -1138,237 +1207,24 @@ function getStatusDisplay($transaction)
             }
         });
 
-        // Refresh data every 30 seconds
-        setInterval(function () {
-            // Optional: Add auto-refresh functionality
-            // location.reload();
-        }, 30000);
-
         // Print styles enhancement
-        window.addEventListener('beforeprint', function () {
-            // Hide elements that shouldn't be printed
+        window.addEventListener('beforeprint', function() {
             $('.no-print').hide();
-            // Show only invoice template
             $('#invoiceTemplate').show();
         });
 
-        window.addEventListener('afterprint', function () {
-            // Restore page elements
+        window.addEventListener('afterprint', function() {
             $('.no-print').show();
             $('#invoiceTemplate').hide();
         });
 
-        // Tambahkan styles ke head jika belum ada
-        if (!document.getElementById('suratJalanStyles')) {
-            const styleElement = document.createElement('div');
-            styleElement.id = 'suratJalanStyles';
-            styleElement.innerHTML = suratJalanStyles;
-            document.head.appendChild(styleElement);
-        }
-
-        // Event listener untuk print events surat jalan
-        window.addEventListener('beforeprint', function () {
-            if (document.getElementById('suratJalanTemplate').style.display !== 'none') {
-                document.body.classList.add('printing-surat-jalan');
-            }
-        });
-
-        window.addEventListener('afterprint', function () {
-            document.body.classList.remove('printing-surat-jalan');
-        });
-
-        // Fungsi untuk print surat jalan dari modal (jika diperlukan)
-        function printSuratJalanFromModal() {
-            if (currentTransactionData) {
-                printSuratJalan(currentTransactionData);
-            } else {
-                alert('Data transaksi tidak tersedia untuk dicetak.');
-            }
-        }
-
-        // Enhanced search functionality
-        $('#table-1_filter input').on('keyup', function () {
-            let searchTerm = $(this).val().toLowerCase();
-            if (searchTerm.length > 2) {
-                // Highlight search terms
-                $('#table-1 tbody tr').each(function () {
-                    let rowText = $(this).text().toLowerCase();
-                    if (rowText.includes(searchTerm)) {
-                        $(this).addClass('table-warning');
-                    } else {
-                        $(this).removeClass('table-warning');
-                    }
-                });
-            } else {
-                $('#table-1 tbody tr').removeClass('table-warning');
-            }
-        });
-
-        // Modal enhancement
-        $('#viewModal').on('shown.bs.modal', function () {
-            // Focus on close button for accessibility
-            $(this).find('[data-dismiss="modal"]').first().focus();
-        });
-
-        // Error handling for images
-        $('.product-image').on('error', function () {
-            $(this).attr('src', '../../assets/img/no-image.png');
-            $(this).addClass('bg-light');
-        });
-
-        // Add loading state for actions
-        $('button[onclick^="viewTransaction"], button[onclick^="printInvoice"]').on('click', function () {
-            let $btn = $(this);
-            let originalHtml = $btn.html();
-
-            $btn.prop('disabled', true);
-            $btn.html('<i class="fas fa-spinner fa-spin"></i>');
-
-            setTimeout(function () {
-                $btn.prop('disabled', false);
-                $btn.html(originalHtml);
-            }, 1000);
-        });
-
-        // Export functionality (optional)
-        function exportToExcel() {
-            // Implementation for Excel export if needed
-            console.log('Export to Excel functionality can be added here');
-        }
-
-        function exportToPDF() {
-            // Implementation for PDF export if needed
-            console.log('Export to PDF functionality can be added here');
-        }
-
-        // Statistics counter animation (optional)
-        function animateCounter(element, target) {
-            let current = 0;
-            let increment = target / 50;
-            let timer = setInterval(function () {
-                current += increment;
-                if (current >= target) {
-                    current = target;
-                    clearInterval(timer);
-                }
-                $(element).text(Math.floor(current));
-            }, 20);
-        }
-
-        // Initialize counter animation for total transactions
-        let totalTransactions = <?php echo count($transactions); ?>;
-        if (totalTransactions > 0) {
-            animateCounter('.badge-info', totalTransactions);
-        }
-
-        // Keyboard shortcuts
-        $(document).on('keydown', function (e) {
-            // Ctrl + P for print
-            if (e.ctrlKey && e.key === 'p') {
-                e.preventDefault();
-                if (currentTransactionData) {
-                    printFromModal();
-                }
-            }
-
-            // ESC to close modal
-            if (e.key === 'Escape') {
-                $('#viewModal').modal('hide');
-            }
-        });
-
-        // Touch/mobile enhancements
-        if ('ontouchstart' in window) {
-            // Add touch-friendly interactions for mobile
-            $('.btn-group .btn').addClass('btn-lg');
-            $('.table-responsive').css('overflow-x', 'auto');
-        }
-
-        // Accessibility improvements
-        $('button[title]').attr('aria-label', function () {
-            return $(this).attr('title');
-        });
-
-        // Form validation helpers (if needed for future forms)
-        function validateForm(formId) {
-            let isValid = true;
-            $(formId + ' [required]').each(function () {
-                if (!$(this).val()) {
-                    $(this).addClass('is-invalid');
-                    isValid = false;
-                } else {
-                    $(this).removeClass('is-invalid');
-                }
-            });
-            return isValid;
-        }
-
-        // Notification system enhancement
-        function showNotification(title, message, type = 'info') {
-            // Create dynamic notification
-            let notification = `
-                <div class="alert alert-${type} alert-has-icon alert-dismissible fade show" role="alert">
-                    <div class="alert-icon"><i class="fas fa-info-circle"></i></div>
-                    <div class="alert-body">
-                        <div class="alert-title">${title}</div>
-                        ${message}
-                    </div>
-                    <button type="button" class="close" data-dismiss="alert">
-                        <span>&times;</span>
-                    </button>
-                </div>
-            `;
-
-            $('.alert-container').append(notification);
-
-            // Auto remove after 5 seconds
-            setTimeout(function () {
-                $('.alert-container .alert').last().fadeOut('slow', function () {
-                    $(this).remove();
-                });
-            }, 5000);
-        }
-
-        // Function to get status badge HTML
-        function getStatusBadge(status, gudangEmail, driverEmail) {
-            let badge = '';
-
-            if (status === 'disiapkan' && gudangEmail) {
-                badge = `<span class="badge badge-info badge-lg">
-                    <i class="fas fa-box mr-1"></i>DISIAPKAN - ${gudangEmail.toUpperCase()}
-                 </span>`;
-            } else if (status === 'dikirim' && driverEmail) {
-                badge = `<span class="badge badge-warning badge-lg">
-                    <i class="fas fa-truck mr-1"></i>DIKIRIM
-                 </span>
-                 <br><small class="text-muted">Driver: ${driverEmail}</small>`;
-            } else if (status === 'terkirim') {
-                badge = `<span class="badge badge-success badge-lg">
-                    <i class="fas fa-check mr-1"></i>TERKIRIM
-                 </span>`;
-            } else {
-                badge = `<span class="badge badge-secondary badge-lg">
-                    <i class="fas fa-clock mr-1"></i>DI PROSES
-                 </span>`;
-            }
-
-            return badge;
-        }
-
-        // Enhanced notification for driver assignment
-        function showDriverAssignedNotification(driverEmail, orderId) {
-            showNotification(
-                'Driver Ditugaskan!',
-                `Driver ${driverEmail} telah ditugaskan untuk Order ID: ${orderId}`,
-                'success'
-            );
-        }
+        // Initialize counter for total transactions
+        let totalTransactions = <?php echo count($grouped_transactions); ?>;
 
         // Console info for debugging
-        console.log('🚀 Transaction Management System Loaded');
-        console.log('📊 Total Transactions Ready to Ship:', totalTransactions);
+        console.log('🚀 Pengiriman Management System Loaded');
+        console.log('📊 Total Transactions in Delivery:', totalTransactions);
         console.log('🔧 DataTable initialized with responsive design');
-
     </script>
 
     <!-- Additional CSS for better mobile responsiveness -->
@@ -1378,7 +1234,8 @@ function getStatusDisplay($transaction)
                 font-size: 0.875rem;
             }
 
-            .product-image {
+            .product-image,
+            .item-image {
                 width: 35px;
                 height: 35px;
             }
@@ -1391,21 +1248,30 @@ function getStatusDisplay($transaction)
             .modal-xl {
                 max-width: 95%;
             }
+
+            .items-list {
+                max-height: 80px;
+            }
         }
 
         /* Enhanced print styles */
         @media print {
-            .invoice-print {
+
+            .invoice-print,
+            .surat-jalan-print {
                 margin: 0;
                 padding: 0;
             }
 
-            .invoice-print table {
+            .invoice-print table,
+            .surat-jalan-print table {
                 page-break-inside: avoid;
             }
 
             .invoice-print h1,
-            .invoice-print h3 {
+            .invoice-print h3,
+            .surat-jalan-print h1,
+            .surat-jalan-print h3 {
                 page-break-after: avoid;
             }
         }
@@ -1430,29 +1296,23 @@ function getStatusDisplay($transaction)
             background-color: rgba(255, 193, 7, 0.2) !important;
         }
 
-        /* Enhanced alert container */
-        .alert-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            max-width: 400px;
+        /* Status badge animations */
+        .badge {
+            transition: all 0.3s ease;
         }
 
-        .fade-in {
-            animation: fadeIn 0.5s ease-in;
+        .badge:hover {
+            transform: scale(1.05);
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
+        /* Button hover effects */
+        .btn-group .btn {
+            transition: all 0.2s ease;
+        }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .btn-group .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
     </style>
 

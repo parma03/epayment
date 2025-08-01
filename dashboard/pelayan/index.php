@@ -79,12 +79,23 @@ try {
     $stmt_stok_rendah->execute();
     $result_stok_rendah = $stmt_stok_rendah->fetchAll();
 
-    // Transaksi terbaru
-    $query_transaksi_terbaru = "SELECT t.*, b.nama_barang, u.email as customer_email 
+    // Transaksi terbaru - FIXED: menggunakan tb_transaksi_detail untuk join dengan barang
+    $query_transaksi_terbaru = "SELECT 
+        t.id_transaksi,
+        t.nama_pemesan, 
+        t.total_harga, 
+        t.status_pembayaran, 
+        t.order_id, 
+        t.created_at,
+        u.email as customer_email,
+        GROUP_CONCAT(td.nama_barang SEPARATOR ', ') as nama_barang,
+        SUM(td.jumlah_beli) as total_jumlah
         FROM tb_transaksi t 
-        JOIN tb_barang b ON t.id_barang = b.id_barang 
-        JOIN tb_user u ON t.id_user = u.id_user 
-        ORDER BY t.created_at DESC LIMIT 5";
+        LEFT JOIN tb_transaksi_detail td ON t.id_transaksi = td.id_transaksi
+        LEFT JOIN tb_user u ON t.id_user = u.id_user 
+        GROUP BY t.id_transaksi
+        ORDER BY t.created_at DESC 
+        LIMIT 5";
     $stmt_transaksi_terbaru = $pdo->prepare($query_transaksi_terbaru);
     $stmt_transaksi_terbaru->execute();
     $result_transaksi_terbaru = $stmt_transaksi_terbaru->fetchAll();
@@ -101,7 +112,6 @@ try {
     $stmt_chart = $pdo->prepare($query_chart);
     $stmt_chart->execute();
     $chart_data = $stmt_chart->fetchAll();
-
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage();
 }
@@ -513,9 +523,20 @@ try {
                                                                     class="font-weight-600"><?php echo htmlspecialchars($transaksi['order_id']); ?></a>
                                                             </td>
                                                             <td><?php echo htmlspecialchars($transaksi['nama_pemesan']); ?></td>
-                                                            <td><?php echo htmlspecialchars($transaksi['nama_barang']); ?></td>
-                                                            <td><?php echo $transaksi['jumlah_beli']; ?></td>
-                                                            <td>Rp
+                                                            <td>
+                                                                <span class="text-sm" title="<?php echo htmlspecialchars($transaksi['nama_barang']); ?>">
+                                                                    <?php
+                                                                    $barang_list = $transaksi['nama_barang'];
+                                                                    if (strlen($barang_list) > 30) {
+                                                                        echo htmlspecialchars(substr($barang_list, 0, 30)) . '...';
+                                                                    } else {
+                                                                        echo htmlspecialchars($barang_list);
+                                                                    }
+                                                                    ?>
+                                                                </span>
+                                                            </td>
+                                                            <td><?php echo $transaksi['total_jumlah']; ?></td>
+                                                            <td class="font-weight-600">Rp
                                                                 <?php echo number_format($transaksi['total_harga'], 0, ',', '.'); ?>
                                                             </td>
                                                             <td>
@@ -636,7 +657,7 @@ try {
 
     <!-- Custom Chart Script -->
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             // Revenue Chart
             var canvas = document.getElementById("revenueChart1");
 
@@ -659,18 +680,27 @@ try {
 
             // Cek apakah chartData ada dan tidak kosong
             if (chartData && chartData.length > 0) {
-                chartData.forEach(function (item) {
+                chartData.forEach(function(item) {
                     var date = new Date(item.month + '-01');
-                    labels.push(date.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' }));
+                    labels.push(date.toLocaleDateString('id-ID', {
+                        month: 'short',
+                        year: 'numeric'
+                    }));
                     revenueData.push(parseInt(item.revenue) || 0);
                     orderData.push(parseInt(item.total_orders) || 0);
                 });
             } else {
                 // Data dummy jika tidak ada data
-                labels = ['Jan 2024', 'Feb 2024', 'Mar 2024', 'Apr 2024', 'May 2024', 'Jun 2024'];
-                revenueData = [0, 0, 0, 0, 0, 0];
-                orderData = [0, 0, 0, 0, 0, 0];
-
+                var currentDate = new Date();
+                for (var i = 5; i >= 0; i--) {
+                    var date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+                    labels.push(date.toLocaleDateString('id-ID', {
+                        month: 'short',
+                        year: 'numeric'
+                    }));
+                    revenueData.push(0);
+                    orderData.push(0);
+                }
                 console.warn('No chart data available, using dummy data');
             }
 
@@ -705,7 +735,6 @@ try {
                             pointBorderWidth: 2,
                             pointRadius: 6,
                             pointHoverRadius: 8
-                            // Hapus yAxisID: 'y1' - ini yang menyebabkan error
                         }]
                     },
                     options: {
@@ -732,7 +761,7 @@ try {
                                 cornerRadius: 8,
                                 displayColors: true,
                                 callbacks: {
-                                    label: function (context) {
+                                    label: function(context) {
                                         if (context.datasetIndex === 0) {
                                             return 'Revenue: Rp ' + context.parsed.y.toLocaleString('id-ID');
                                         } else {
@@ -763,12 +792,11 @@ try {
                                     color: 'rgba(0,0,0,0.1)'
                                 },
                                 ticks: {
-                                    callback: function (value) {
+                                    callback: function(value) {
                                         return value.toLocaleString('id-ID');
                                     }
                                 }
                             }
-                            // Hapus y1 axis - ini yang menyebabkan error
                         }
                     }
                 });
@@ -785,20 +813,21 @@ try {
                 ctx.fillText('Error loading chart', canvas.width / 2, canvas.height / 2);
             }
         });
+
         // Auto dismiss alerts after 5 seconds
-        setTimeout(function () {
+        setTimeout(function() {
             $('.alert').fadeOut('slow');
         }, 5000);
 
         // Add loading animation to buttons
-        $(document).on('click', '.btn', function () {
+        $(document).on('click', '.btn', function() {
             var btn = $(this);
             if (!btn.hasClass('no-loading')) {
                 btn.prop('disabled', true);
                 var originalText = btn.html();
                 btn.html('<i class="fas fa-spinner fa-spin"></i> Loading...');
 
-                setTimeout(function () {
+                setTimeout(function() {
                     btn.prop('disabled', false);
                     btn.html(originalText);
                 }, 1000);
@@ -807,19 +836,21 @@ try {
 
         // Animate counters on page load
         function animateCounters() {
-            $('.card-body').each(function () {
+            $('.card-body').each(function() {
                 var $this = $(this);
                 var countTo = $this.text().replace(/[^0-9]/g, '');
                 if (countTo && !isNaN(countTo)) {
-                    $({ countNum: 0 }).animate({
+                    $({
+                        countNum: 0
+                    }).animate({
                         countNum: countTo
                     }, {
                         duration: 2000,
                         easing: 'linear',
-                        step: function () {
+                        step: function() {
                             $this.text(Math.floor(this.countNum).toLocaleString('id-ID'));
                         },
-                        complete: function () {
+                        complete: function() {
                             $this.text(parseInt(countTo).toLocaleString('id-ID'));
                         }
                     });
@@ -828,9 +859,9 @@ try {
         }
 
         // Initialize animations when page loads
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Add entrance animations
-            $('.stats-card').each(function (index) {
+            $('.stats-card').each(function(index) {
                 $(this).css({
                     'opacity': '0',
                     'transform': 'translateY(30px)'
@@ -845,10 +876,10 @@ try {
 
             // Add hover effects for quick action buttons
             $('.btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-warning, .btn-outline-secondary, .btn-outline-dark').hover(
-                function () {
+                function() {
                     $(this).addClass('shadow-lg');
                 },
-                function () {
+                function() {
                     $(this).removeClass('shadow-lg');
                 }
             );
@@ -886,7 +917,7 @@ try {
         updateClock(); // Initial call
 
         // Add smooth scrolling for anchor links
-        $('a[href^="#"]').on('click', function (event) {
+        $('a[href^="#"]').on('click', function(event) {
             var target = $(this.getAttribute('href'));
             if (target.length) {
                 event.preventDefault();

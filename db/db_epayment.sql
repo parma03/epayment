@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jul 01, 2025 at 02:52 PM
+-- Generation Time: Jul 31, 2025 at 12:08 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -43,8 +43,24 @@ CREATE TABLE `tb_barang` (
 --
 
 INSERT INTO `tb_barang` (`id_barang`, `nama_barang`, `deskripsi_barang`, `stok_barang`, `harga_barang`, `photo_barang`, `created_at`, `updated_at`) VALUES
-(1, 'tes barang 1', 'tes 1111', 3, 1500000.00, '685fc1f7e2771.jpg', '2025-06-29 17:20:39', '2025-06-29 17:20:39'),
-(2, 'tes barang 2', 'tew', 200, 1000000.00, '685fc2e1615cf.jpg', '2025-06-29 17:20:39', '2025-06-29 17:20:39');
+(1, 'tes barang 1', 'tes 1111', 0, 1500000.00, '685fc1f7e2771.jpg', '2025-06-29 17:20:39', '2025-06-29 17:20:39'),
+(2, 'tes barang 2', 'tew', 192, 1000000.00, '685fc2e1615cf.jpg', '2025-06-29 17:20:39', '2025-06-29 17:20:39'),
+(3, 'oli Yamalube1', 'tes', 9, 111111.00, NULL, '2025-07-13 11:30:44', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `tb_keranjang`
+--
+
+CREATE TABLE `tb_keranjang` (
+  `id_keranjang` bigint(11) NOT NULL,
+  `id_user` bigint(11) NOT NULL,
+  `id_barang` bigint(11) NOT NULL,
+  `jumlah` int(11) NOT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -62,14 +78,6 @@ CREATE TABLE `tb_pengiriman` (
   `updated_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `tb_pengiriman`
---
-
-INSERT INTO `tb_pengiriman` (`id_pengiriman`, `id_transaksi`, `id_driver`, `id_gudang`, `status`, `created_at`, `updated_at`) VALUES
-(2, 8, 4, 5, 'selesai', '2025-06-28 21:00:31', '2025-06-29 02:25:04'),
-(4, 9, NULL, 5, 'dikirim', '2025-06-29 12:29:30', '2025-06-30 00:29:36');
-
 -- --------------------------------------------------------
 
 --
@@ -78,13 +86,11 @@ INSERT INTO `tb_pengiriman` (`id_pengiriman`, `id_transaksi`, `id_driver`, `id_g
 
 CREATE TABLE `tb_transaksi` (
   `id_transaksi` bigint(11) NOT NULL,
-  `id_barang` bigint(11) NOT NULL,
   `id_user` bigint(11) NOT NULL,
   `nama_pemesan` varchar(255) NOT NULL,
   `nohp_pemesan` varchar(20) NOT NULL,
   `alamat_pemesan` text NOT NULL,
-  `jumlah_beli` int(11) NOT NULL,
-  `total_harga` decimal(10,2) NOT NULL,
+  `total_harga` decimal(10,2) NOT NULL COMMENT 'Total keseluruhan transaksi',
   `status_pembayaran` enum('pending','paid','failed','cancelled') NOT NULL,
   `order_id` varchar(100) NOT NULL,
   `snap_token` text NOT NULL,
@@ -96,9 +102,33 @@ CREATE TABLE `tb_transaksi` (
 -- Dumping data for table `tb_transaksi`
 --
 
-INSERT INTO `tb_transaksi` (`id_transaksi`, `id_barang`, `id_user`, `nama_pemesan`, `nohp_pemesan`, `alamat_pemesan`, `jumlah_beli`, `total_harga`, `status_pembayaran`, `order_id`, `snap_token`, `created_at`, `updated_at`) VALUES
-(8, 1, 6, 'tes pelanggan 1', '08215225551', 'tes', 2, 3000000.00, 'paid', 'ORDER-1751119603-2680', 'e38895da-342e-4ec1-98a4-377ca9b66c25', '2025-06-28 21:07:10', NULL),
-(9, 1, 6, 'tes pelanggan 1', '08215225551', 'tes', 2, 3000000.00, 'paid', 'ORDER-1751119603-2680', 'e38895da-342e-4ec1-98a4-377ca9b66c25', '2025-06-28 21:07:10', NULL);
+INSERT INTO `tb_transaksi` (`id_transaksi`, `id_user`, `nama_pemesan`, `nohp_pemesan`, `alamat_pemesan`, `total_harga`, `status_pembayaran`, `order_id`, `snap_token`, `created_at`, `updated_at`) VALUES
+(14, 6, 'tes', '123', 'tes', 1111111.00, 'paid', 'CART-1753956319-4358', 'd4210f5b-6d09-4cec-9a42-dac521093aef', '2025-07-31 17:05:34', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `tb_transaksi_detail`
+--
+
+CREATE TABLE `tb_transaksi_detail` (
+  `id_detail` bigint(11) NOT NULL,
+  `id_transaksi` bigint(11) NOT NULL,
+  `id_barang` bigint(11) NOT NULL,
+  `nama_barang` varchar(255) NOT NULL,
+  `harga_barang` decimal(10,2) NOT NULL,
+  `jumlah_beli` int(11) NOT NULL,
+  `subtotal` decimal(10,2) NOT NULL,
+  `created_at` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `tb_transaksi_detail`
+--
+
+INSERT INTO `tb_transaksi_detail` (`id_detail`, `id_transaksi`, `id_barang`, `nama_barang`, `harga_barang`, `jumlah_beli`, `subtotal`, `created_at`) VALUES
+(1, 14, 2, 'tes barang 2', 1000000.00, 1, 1000000.00, '2025-07-31 17:05:34'),
+(2, 14, 3, 'oli Yamalube1', 111111.00, 1, 111111.00, '2025-07-31 17:05:34');
 
 -- --------------------------------------------------------
 
@@ -122,12 +152,10 @@ CREATE TABLE `tb_user` (
 
 INSERT INTO `tb_user` (`id_user`, `email`, `password`, `role`, `photo_profile`, `created_at`, `update_at`) VALUES
 (1, 'admin@gmail.com', '123', 'Administrator', '6862b46960bc0.jpg', '2025-06-25 20:11:53', '2025-06-30 22:59:37'),
-(2, 'tes123@gmail.com1', '123', 'Administrator', '685facdb4e230.png', '2025-06-28 15:50:35', '2025-06-28 15:51:25'),
 (3, 'tespelayan@gmail.com', '123', 'Pelayan', '685fadddf27cb.png', '2025-06-28 15:54:53', '2025-06-28 15:59:25'),
 (4, 'tesdriver@gmail.com', '123', 'Driver', '685faedb49634.png', '2025-06-28 15:59:07', NULL),
 (5, 'tesgudang@gmail.com', '123', 'Gudang', '685fafb398a3b.png', '2025-06-28 16:02:43', NULL),
-(6, 'tespelanggan@gmail.com', '123', 'Pelanggan', '685fafe6b70d3.png', '2025-06-28 16:03:34', NULL),
-(7, 'tespelanggan1@gmail.com', '8056174', 'Pelanggan', NULL, '2025-06-30 21:12:01', NULL);
+(6, 'tespelanggan@gmail.com', '123', 'Pelanggan', '685fafe6b70d3.png', '2025-06-28 16:03:34', NULL);
 
 --
 -- Indexes for dumped tables
@@ -138,6 +166,14 @@ INSERT INTO `tb_user` (`id_user`, `email`, `password`, `role`, `photo_profile`, 
 --
 ALTER TABLE `tb_barang`
   ADD PRIMARY KEY (`id_barang`);
+
+--
+-- Indexes for table `tb_keranjang`
+--
+ALTER TABLE `tb_keranjang`
+  ADD PRIMARY KEY (`id_keranjang`),
+  ADD KEY `id_user` (`id_user`),
+  ADD KEY `id_barang` (`id_barang`);
 
 --
 -- Indexes for table `tb_pengiriman`
@@ -153,8 +189,15 @@ ALTER TABLE `tb_pengiriman`
 --
 ALTER TABLE `tb_transaksi`
   ADD PRIMARY KEY (`id_transaksi`),
-  ADD KEY `id_barang` (`id_barang`),
   ADD KEY `id_user` (`id_user`);
+
+--
+-- Indexes for table `tb_transaksi_detail`
+--
+ALTER TABLE `tb_transaksi_detail`
+  ADD PRIMARY KEY (`id_detail`),
+  ADD KEY `id_transaksi` (`id_transaksi`),
+  ADD KEY `id_barang` (`id_barang`);
 
 --
 -- Indexes for table `tb_user`
@@ -170,7 +213,13 @@ ALTER TABLE `tb_user`
 -- AUTO_INCREMENT for table `tb_barang`
 --
 ALTER TABLE `tb_barang`
-  MODIFY `id_barang` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_barang` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT for table `tb_keranjang`
+--
+ALTER TABLE `tb_keranjang`
+  MODIFY `id_keranjang` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `tb_pengiriman`
@@ -182,7 +231,13 @@ ALTER TABLE `tb_pengiriman`
 -- AUTO_INCREMENT for table `tb_transaksi`
 --
 ALTER TABLE `tb_transaksi`
-  MODIFY `id_transaksi` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_transaksi` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+
+--
+-- AUTO_INCREMENT for table `tb_transaksi_detail`
+--
+ALTER TABLE `tb_transaksi_detail`
+  MODIFY `id_detail` bigint(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `tb_user`
@@ -206,8 +261,14 @@ ALTER TABLE `tb_pengiriman`
 -- Constraints for table `tb_transaksi`
 --
 ALTER TABLE `tb_transaksi`
-  ADD CONSTRAINT `tb_transaksi_ibfk_1` FOREIGN KEY (`id_barang`) REFERENCES `tb_barang` (`id_barang`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `tb_transaksi_ibfk_2` FOREIGN KEY (`id_user`) REFERENCES `tb_user` (`id_user`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `tb_transaksi_detail`
+--
+ALTER TABLE `tb_transaksi_detail`
+  ADD CONSTRAINT `tb_transaksi_detail_ibfk_1` FOREIGN KEY (`id_transaksi`) REFERENCES `tb_transaksi` (`id_transaksi`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `tb_transaksi_detail_ibfk_2` FOREIGN KEY (`id_barang`) REFERENCES `tb_barang` (`id_barang`) ON DELETE CASCADE ON UPDATE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

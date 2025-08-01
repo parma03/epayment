@@ -1,5 +1,5 @@
 <?php
-// payment_success_cart.php - FILE BARU
+// payment_success_cart.php - MODIFIED VERSION
 session_start();
 include '../../db/koneksi.php';
 
@@ -41,26 +41,43 @@ try {
                 }
             }
 
-            // Simpan setiap item sebagai transaksi terpisah
+            // MODIFIKASI: Simpan SATU transaksi utama untuk keseluruhan keranjang
+            $stmt = $pdo->prepare("
+                INSERT INTO tb_transaksi 
+                (id_user, nama_pemesan, nohp_pemesan, alamat_pemesan, 
+                 total_harga, status_pembayaran, order_id, snap_token, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+
+            $stmt->execute([
+                $transaction_data['user_id'],
+                $transaction_data['nama_pemesan'],
+                $transaction_data['nohp_pemesan'],
+                $transaction_data['alamat_pemesan'],
+                $transaction_data['total_amount'], // Total keseluruhan
+                'paid',
+                $transaction_data['order_id'],
+                $transaction_data['snap_token']
+            ]);
+
+            // Dapatkan ID transaksi yang baru dibuat
+            $id_transaksi = $pdo->lastInsertId();
+
+            // MODIFIKASI: Simpan detail setiap item ke tabel tb_transaksi_detail
             foreach ($transaction_data['cart_items'] as $item) {
                 $stmt = $pdo->prepare("
-                    INSERT INTO tb_transaksi 
-                    (id_barang, id_user, nama_pemesan, nohp_pemesan, alamat_pemesan, 
-                     jumlah_beli, total_harga, status_pembayaran, order_id, snap_token, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    INSERT INTO tb_transaksi_detail 
+                    (id_transaksi, id_barang, nama_barang, harga_barang, jumlah_beli, subtotal, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, NOW())
                 ");
 
                 $stmt->execute([
+                    $id_transaksi,
                     $item['id_barang'],
-                    $transaction_data['user_id'],
-                    $transaction_data['nama_pemesan'],
-                    $transaction_data['nohp_pemesan'],
-                    $transaction_data['alamat_pemesan'],
+                    $item['nama_barang'],
+                    $item['harga_barang'],
                     $item['jumlah'],
-                    $item['subtotal'],
-                    'paid',
-                    $transaction_data['order_id'],
-                    $transaction_data['snap_token']
+                    $item['subtotal']
                 ]);
 
                 // Update stok barang
@@ -79,7 +96,8 @@ try {
 
             echo json_encode([
                 'status' => 'success',
-                'message' => 'All transactions saved successfully'
+                'message' => 'Transaction saved successfully',
+                'transaction_id' => $id_transaksi
             ]);
         } catch (Exception $e) {
             $pdo->rollBack();

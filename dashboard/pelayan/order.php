@@ -62,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         // Redirect untuk mencegah resubmission
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
-
     } catch (Exception $e) {
         $_SESSION['alert_message'] = 'Terjadi kesalahan: ' . $e->getMessage();
         $_SESSION['alert_type'] = 'danger';
@@ -82,16 +81,19 @@ $alert_icon = isset($_SESSION['alert_icon']) ? $_SESSION['alert_icon'] : '';
 // Hapus alert dari session setelah digunakan
 unset($_SESSION['alert_message'], $_SESSION['alert_type'], $_SESSION['alert_title'], $_SESSION['alert_icon']);
 
-// Fetch transaksi yang belum ada di tb_pengiriman dengan JOIN untuk mendapatkan data lengkap
+// Query untuk mengambil data transaksi yang belum ada di tb_pengiriman dengan detail lengkap
 $stmt = $pdo->prepare("
     SELECT 
         t.*,
-        b.nama_barang,
-        b.harga_barang,
+        td.nama_barang,
+        td.harga_barang,
+        td.jumlah_beli,
+        td.subtotal,
         b.photo_barang,
         u.email as email_user
     FROM tb_transaksi t
-    LEFT JOIN tb_barang b ON t.id_barang = b.id_barang
+    LEFT JOIN tb_transaksi_detail td ON t.id_transaksi = td.id_transaksi
+    LEFT JOIN tb_barang b ON td.id_barang = b.id_barang
     LEFT JOIN tb_user u ON t.id_user = u.id_user
     LEFT JOIN tb_pengiriman p ON t.id_transaksi = p.id_transaksi
     WHERE p.id_transaksi IS NULL 
@@ -100,6 +102,23 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute();
 $transactions = $stmt->fetchAll();
+
+// Group transactions by id_transaksi untuk menggabungkan detail transaksi yang sama
+$grouped_transactions = [];
+foreach ($transactions as $trans) {
+    $trans_id = $trans['id_transaksi'];
+    if (!isset($grouped_transactions[$trans_id])) {
+        $grouped_transactions[$trans_id] = $trans;
+        $grouped_transactions[$trans_id]['items'] = [];
+    }
+    $grouped_transactions[$trans_id]['items'][] = [
+        'nama_barang' => $trans['nama_barang'],
+        'harga_barang' => $trans['harga_barang'],
+        'jumlah_beli' => $trans['jumlah_beli'],
+        'subtotal' => $trans['subtotal'],
+        'photo_barang' => $trans['photo_barang']
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -137,12 +156,57 @@ $transactions = $stmt->fetchAll();
             color: #28a745;
         }
 
-        . {
+        .order-id {
             font-family: 'Courier New', monospace;
             background: #f8f9fa;
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.85em;
+        }
+
+        .items-list {
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .item-row {
+            border-bottom: 1px solid #f0f0f0;
+            padding: 8px 0;
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        .item-image {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @media print {
@@ -165,6 +229,34 @@ $transactions = $stmt->fetchAll();
             .no-print {
                 display: none !important;
             }
+        }
+
+        /* Enhanced scrollbar for items list */
+        .items-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .items-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 2px;
+        }
+
+        .items-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+
+        .items-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Item row hover effects */
+        .item-row {
+            transition: background-color 0.2s ease;
+        }
+
+        .item-row:hover {
+            background-color: rgba(0, 123, 255, 0.05);
         }
     </style>
 </head>
@@ -216,12 +308,12 @@ $transactions = $stmt->fetchAll();
                                         <div class="card-header-action">
                                             <div class="badge badge-info badge-lg">
                                                 <i class="fas fa-info-circle mr-1"></i>
-                                                Total: <?php echo count($transactions); ?> transaksi siap diproses
+                                                Total: <?php echo count($grouped_transactions); ?> transaksi siap diproses
                                             </div>
                                         </div>
                                     </div>
                                     <div class="card-body">
-                                        <?php if (empty($transactions)): ?>
+                                        <?php if (empty($grouped_transactions)): ?>
                                             <div class="empty-state" data-height="400">
                                                 <div class="empty-state-icon">
                                                     <i class="fas fa-box-open"></i>
@@ -240,7 +332,7 @@ $transactions = $stmt->fetchAll();
                                                             <th><i class="fas fa-user mr-1"></i>Pemesan</th>
                                                             <th><i class="fas fa-phone mr-1"></i>No. HP</th>
                                                             <th><i class="fas fa-map-marker-alt mr-1"></i>Alamat</th>
-                                                            <th><i class="fas fa-shopping-cart mr-1"></i>Qty</th>
+                                                            <th><i class="fas fa-shopping-cart mr-1"></i>Items</th>
                                                             <th><i class="fas fa-money-bill-wave mr-1"></i>Total</th>
                                                             <th><i class="fas fa-calendar mr-1"></i>Tanggal</th>
                                                             <th class="text-center"><i class="fas fa-cogs mr-1"></i>Action
@@ -248,27 +340,35 @@ $transactions = $stmt->fetchAll();
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <?php foreach ($transactions as $index => $trans): ?>
-
+                                                        <?php $index = 0;
+                                                        foreach ($grouped_transactions as $trans): $index++; ?>
                                                             <tr>
                                                                 <td class="text-center">
                                                                     <span
-                                                                        class="badge badge-secondary"><?php echo $index + 1; ?></span>
+                                                                        class="badge badge-secondary"><?php echo $index; ?></span>
                                                                 </td>
                                                                 <td>
-                                                                    <div class="d-flex align-items-center">
-                                                                        <?php if ($trans['photo_barang']): ?>
-                                                                            <img src="../../assets/img/products/<?php echo $trans['photo_barang']; ?>"
-                                                                                class="product-image mr-2" alt="Product">
-                                                                        <?php else: ?>
-                                                                            <div
-                                                                                class="product-image mr-2 bg-light d-flex align-items-center justify-content-center">
-                                                                                <i class="fas fa-image text-muted"></i>
-                                                                            </div>
+                                                                    <div class="items-list">
+                                                                        <?php if (!empty($trans['items'])): ?>
+                                                                            <?php foreach ($trans['items'] as $item): ?>
+                                                                                <div class="item-row d-flex align-items-center">
+                                                                                    <?php if ($item['photo_barang']): ?>
+                                                                                        <img src="../../assets/img/products/<?php echo $item['photo_barang']; ?>"
+                                                                                            class="item-image mr-2" alt="Product">
+                                                                                    <?php else: ?>
+                                                                                        <div
+                                                                                            class="item-image mr-2 bg-light d-flex align-items-center justify-content-center">
+                                                                                            <i class="fas fa-image text-muted"></i>
+                                                                                        </div>
+                                                                                    <?php endif; ?>
+                                                                                    <div>
+                                                                                        <small><strong><?php echo htmlspecialchars($item['nama_barang'] ?? 'Produk Tidak Ditemukan'); ?></strong></small>
+                                                                                        <br>
+                                                                                        <small class="text-muted"><?php echo $item['jumlah_beli']; ?> x Rp <?php echo number_format($item['harga_barang'], 0, ',', '.'); ?></small>
+                                                                                    </div>
+                                                                                </div>
+                                                                            <?php endforeach; ?>
                                                                         <?php endif; ?>
-                                                                        <div>
-                                                                            <strong><?php echo htmlspecialchars($trans['nama_barang'] ?? 'Produk Tidak Ditemukan'); ?></strong>
-                                                                        </div>
                                                                     </div>
                                                                 </td>
                                                                 <td>
@@ -293,8 +393,8 @@ $transactions = $stmt->fetchAll();
                                                                     </div>
                                                                 </td>
                                                                 <td>
-                                                                    <span>
-                                                                        <?php echo $trans['jumlah_beli']; ?> pcs
+                                                                    <span class="badge badge-primary">
+                                                                        <?php echo count($trans['items']); ?> item(s)
                                                                     </span>
                                                                 </td>
                                                                 <td>
@@ -407,12 +507,8 @@ $transactions = $stmt->fetchAll();
                                 <div class="card-header bg-info text-white">
                                     <h6 class="mb-0"><i class="fas fa-box mr-2"></i>Informasi Produk</h6>
                                 </div>
-                                <div class="card-body text-center">
-                                    <img id="viewProductImage" class="img-fluid rounded mb-3"
-                                        style="max-height: 200px; object-fit: cover;" alt="Product">
-                                    <h5 id="viewProductName" class="text-primary"></h5>
-                                    <p class="text-muted mb-2">Harga Satuan:</p>
-                                    <h6 id="viewProductPrice" class="currency"></h6>
+                                <div class="card-body" id="viewProductsList">
+                                    <!-- Products will be populated here -->
                                 </div>
                             </div>
                         </div>
@@ -453,8 +549,8 @@ $transactions = $stmt->fetchAll();
                                             <table class="table table-borderless">
                                                 <tr>
                                                     <td class="font-weight-bold"><i
-                                                            class="fas fa-shopping-cart text-info mr-2"></i>Jumlah:</td>
-                                                    <td><span id="viewQuantity"
+                                                            class="fas fa-shopping-cart text-info mr-2"></i>Items:</td>
+                                                    <td><span id="viewItemCount"
                                                             class="badge badge-info badge-lg"></span></td>
                                                 </tr>
                                                 <tr>
@@ -546,16 +642,8 @@ $transactions = $stmt->fetchAll();
                             <th style="padding: 12px; text-align: right; border: 1px solid #ddd;">Subtotal</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td style="padding: 12px; border: 1px solid #ddd;" id="printProductName"></td>
-                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;"
-                                id="printProductPrice"></td>
-                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;" id="printQuantity">
-                            </td>
-                            <td style="padding: 12px; text-align: right; border: 1px solid #ddd; font-weight: bold;"
-                                id="printSubtotal"></td>
-                        </tr>
+                    <tbody id="printProductsTable">
+                        <!-- Products will be populated here -->
                     </tbody>
                     <tfoot>
                         <tr style="background: #f8f9fa;">
@@ -599,20 +687,30 @@ $transactions = $stmt->fetchAll();
         let currentTransactionData = null;
 
         // Initialize DataTable
-        $(document).ready(function () {
+        $(document).ready(function() {
             if ($.fn.DataTable.isDataTable('#table-1')) {
                 $('#table-1').DataTable().destroy();
             }
 
             $("#table-1").DataTable({
-                "columnDefs": [
-                    { "orderable": false, "targets": [1, 9] },
-                    { "className": "text-center", "targets": [0, 9] }
+                "columnDefs": [{
+                        "orderable": false,
+                        "targets": [1, 9]
+                    },
+                    {
+                        "className": "text-center",
+                        "targets": [0, 9]
+                    }
                 ],
                 "responsive": true,
                 "pageLength": 10,
-                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "Semua"]],
-                "order": [[8, "desc"]], // Sort by date descending
+                "lengthMenu": [
+                    [5, 10, 25, 50, -1],
+                    [5, 10, 25, 50, "Semua"]
+                ],
+                "order": [
+                    [8, "desc"]
+                ], // Sort by date descending
                 "language": {
                     "lengthMenu": "Tampilkan _MENU_ data per halaman",
                     "zeroRecords": "Data tidak ditemukan",
@@ -644,7 +742,7 @@ $transactions = $stmt->fetchAll();
         }
 
         // Enhancement untuk button loading state saat submit
-        $('form').on('submit', function () {
+        $('form').on('submit', function() {
             let $submitBtn = $(this).find('button[type="submit"]');
             let originalHtml = $submitBtn.html();
 
@@ -652,37 +750,46 @@ $transactions = $stmt->fetchAll();
             $submitBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses...');
 
             // Optional: Set timeout jika form tidak ter-submit dalam 10 detik
-            setTimeout(function () {
+            setTimeout(function() {
                 $submitBtn.prop('disabled', false);
                 $submitBtn.html(originalHtml);
             }, 10000);
         });
-
-        // Auto close modal after successful submission
-        <?php if (isset($_SESSION['alert_type']) && $_SESSION['alert_type'] === 'success'): ?>
-            $('#confirmModal').modal('hide');
-        <?php endif; ?>
 
         // Function to view transaction details
         function viewTransaction(transaction) {
             currentTransactionData = transaction;
 
             // Set product information
-            if (transaction.photo_barang) {
-                $('#viewProductImage').attr('src', '../../assets/img/products/' + transaction.photo_barang);
-            } else {
-                $('#viewProductImage').attr('src', '../../assets/img/no-image.png');
-            }
+            let productsHtml = '';
+            if (transaction.items && transaction.items.length > 0) {
+                transaction.items.forEach(function(item) {
+                    let imageHtml = '';
+                    if (item.photo_barang) {
+                        imageHtml = `<img src="../../assets/img/products/${item.photo_barang}" class="img-fluid rounded mb-2" style="max-height: 100px; object-fit: cover;" alt="Product">`;
+                    } else {
+                        imageHtml = '<div class="bg-light p-3 rounded mb-2 text-center"><i class="fas fa-image text-muted"></i></div>';
+                    }
 
-            $('#viewProductName').text(transaction.nama_barang || 'Produk Tidak Ditemukan');
-            $('#viewProductPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.harga_barang || 0));
+                    productsHtml += `
+                        <div class="mb-3 pb-3 border-bottom">
+                            ${imageHtml}
+                            <h6 class="text-primary">${item.nama_barang || 'Produk Tidak Ditemukan'}</h6>
+                            <p class="text-muted mb-1">Harga: Rp ${new Intl.NumberFormat('id-ID').format(item.harga_barang || 0)}</p>
+                            <p class="text-muted mb-1">Jumlah: ${item.jumlah_beli} pcs</p>
+                            <p class="font-weight-bold text-success">Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(item.subtotal || 0)}</p>
+                        </div>
+                    `;
+                });
+            }
+            $('#viewProductsList').html(productsHtml);
 
             // Set order information
             $('#viewOrderId').text(transaction.order_id);
             $('#viewCustomerName').text(transaction.nama_pemesan);
             $('#viewCustomerEmail').text(transaction.email_user || 'Email tidak tersedia');
             $('#viewCustomerPhone').text(transaction.nohp_pemesan);
-            $('#viewQuantity').text(transaction.jumlah_beli + ' pcs');
+            $('#viewItemCount').text((transaction.items ? transaction.items.length : 0) + ' item(s)');
             $('#viewTotalPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.total_harga));
             $('#viewOrderDate').text(new Date(transaction.created_at).toLocaleString('id-ID'));
             $('#viewShippingAddress').text(transaction.alamat_pemesan);
@@ -712,25 +819,38 @@ $transactions = $stmt->fetchAll();
             $('#printCustomerEmail').text(transaction.email_user || 'Email tidak tersedia');
             $('#printCustomerPhone').text(transaction.nohp_pemesan);
             $('#printShippingAddress').text(transaction.alamat_pemesan);
-            $('#printProductName').text(transaction.nama_barang || 'Produk Tidak Ditemukan');
-            $('#printProductPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.harga_barang || 0));
-            $('#printQuantity').text(transaction.jumlah_beli + ' pcs');
-            $('#printSubtotal').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.total_harga));
+
+            // Populate products table
+            let productsTableHtml = '';
+            if (transaction.items && transaction.items.length > 0) {
+                transaction.items.forEach(function(item) {
+                    productsTableHtml += `
+                        <tr>
+                            <td style="padding: 12px; border: 1px solid #ddd;">${item.nama_barang || 'Produk Tidak Ditemukan'}</td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">Rp ${new Intl.NumberFormat('id-ID').format(item.harga_barang || 0)}</td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">${item.jumlah_beli} pcs</td>
+                            <td style="padding: 12px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Rp ${new Intl.NumberFormat('id-ID').format(item.subtotal || 0)}</td>
+                        </tr>
+                    `;
+                });
+            }
+            $('#printProductsTable').html(productsTableHtml);
+
             $('#printTotalPrice').text('Rp ' + new Intl.NumberFormat('id-ID').format(transaction.total_harga));
             $('#printDateTime').text(new Date().toLocaleString('id-ID'));
         }
 
         // Auto hide alert after 5 seconds
-        setTimeout(function () {
+        setTimeout(function() {
             $('.alert-container .alert').fadeOut('slow');
         }, 5000);
 
         // Enhance table with hover effects
-        $('#table-1 tbody').on('mouseenter', 'tr', function () {
+        $('#table-1 tbody').on('mouseenter', 'tr', function() {
             $(this).addClass('table-active');
         });
 
-        $('#table-1 tbody').on('mouseleave', 'tr', function () {
+        $('#table-1 tbody').on('mouseleave', 'tr', function() {
             $(this).removeClass('table-active');
         });
 
@@ -741,10 +861,9 @@ $transactions = $stmt->fetchAll();
         });
 
         // Format currency on page load
-        $('.currency').each(function () {
+        $('.currency').each(function() {
             let text = $(this).text();
             if (text.includes('Rp')) {
-                // Already formatted
                 return;
             }
             let number = parseFloat(text.replace(/[^\d.-]/g, ''));
@@ -753,32 +872,22 @@ $transactions = $stmt->fetchAll();
             }
         });
 
-        // Refresh data every 30 seconds
-        setInterval(function () {
-            // Optional: Add auto-refresh functionality
-            // location.reload();
-        }, 30000);
-
         // Print styles enhancement
-        window.addEventListener('beforeprint', function () {
-            // Hide elements that shouldn't be printed
+        window.addEventListener('beforeprint', function() {
             $('.no-print').hide();
-            // Show only invoice template
             $('#invoiceTemplate').show();
         });
 
-        window.addEventListener('afterprint', function () {
-            // Restore page elements
+        window.addEventListener('afterprint', function() {
             $('.no-print').show();
             $('#invoiceTemplate').hide();
         });
 
         // Enhanced search functionality
-        $('#table-1_filter input').on('keyup', function () {
+        $('#table-1_filter input').on('keyup', function() {
             let searchTerm = $(this).val().toLowerCase();
             if (searchTerm.length > 2) {
-                // Highlight search terms
-                $('#table-1 tbody tr').each(function () {
+                $('#table-1 tbody tr').each(function() {
                     let rowText = $(this).text().toLowerCase();
                     if (rowText.includes(searchTerm)) {
                         $(this).addClass('table-warning');
@@ -792,47 +901,35 @@ $transactions = $stmt->fetchAll();
         });
 
         // Modal enhancement
-        $('#viewModal').on('shown.bs.modal', function () {
-            // Focus on close button for accessibility
+        $('#viewModal').on('shown.bs.modal', function() {
             $(this).find('[data-dismiss="modal"]').first().focus();
         });
 
         // Error handling for images
-        $('.product-image').on('error', function () {
+        $('.product-image, .item-image').on('error', function() {
             $(this).attr('src', '../../assets/img/no-image.png');
             $(this).addClass('bg-light');
         });
 
         // Add loading state for actions
-        $('button[onclick^="viewTransaction"], button[onclick^="printInvoice"]').on('click', function () {
+        $('button[onclick^="viewTransaction"], button[onclick^="printInvoice"], button[onclick^="confirmOrder"]').on('click', function() {
             let $btn = $(this);
             let originalHtml = $btn.html();
 
             $btn.prop('disabled', true);
             $btn.html('<i class="fas fa-spinner fa-spin"></i>');
 
-            setTimeout(function () {
+            setTimeout(function() {
                 $btn.prop('disabled', false);
                 $btn.html(originalHtml);
             }, 1000);
         });
 
-        // Export functionality (optional)
-        function exportToExcel() {
-            // Implementation for Excel export if needed
-            console.log('Export to Excel functionality can be added here');
-        }
-
-        function exportToPDF() {
-            // Implementation for PDF export if needed
-            console.log('Export to PDF functionality can be added here');
-        }
-
-        // Statistics counter animation (optional)
+        // Statistics counter animation
         function animateCounter(element, target) {
             let current = 0;
             let increment = target / 50;
-            let timer = setInterval(function () {
+            let timer = setInterval(function() {
                 current += increment;
                 if (current >= target) {
                     current = target;
@@ -843,13 +940,13 @@ $transactions = $stmt->fetchAll();
         }
 
         // Initialize counter animation for total transactions
-        let totalTransactions = <?php echo count($transactions); ?>;
+        let totalTransactions = <?php echo count($grouped_transactions); ?>;
         if (totalTransactions > 0) {
             animateCounter('.badge-info', totalTransactions);
         }
 
         // Keyboard shortcuts
-        $(document).on('keydown', function (e) {
+        $(document).on('keydown', function(e) {
             // Ctrl + P for print
             if (e.ctrlKey && e.key === 'p') {
                 e.preventDefault();
@@ -861,38 +958,23 @@ $transactions = $stmt->fetchAll();
             // ESC to close modal
             if (e.key === 'Escape') {
                 $('#viewModal').modal('hide');
+                $('#confirmModal').modal('hide');
             }
         });
 
         // Touch/mobile enhancements
         if ('ontouchstart' in window) {
-            // Add touch-friendly interactions for mobile
             $('.btn-group .btn').addClass('btn-lg');
             $('.table-responsive').css('overflow-x', 'auto');
         }
 
         // Accessibility improvements
-        $('button[title]').attr('aria-label', function () {
+        $('button[title]').attr('aria-label', function() {
             return $(this).attr('title');
         });
 
-        // Form validation helpers (if needed for future forms)
-        function validateForm(formId) {
-            let isValid = true;
-            $(formId + ' [required]').each(function () {
-                if (!$(this).val()) {
-                    $(this).addClass('is-invalid');
-                    isValid = false;
-                } else {
-                    $(this).removeClass('is-invalid');
-                }
-            });
-            return isValid;
-        }
-
         // Notification system enhancement
         function showNotification(title, message, type = 'info') {
-            // Create dynamic notification
             let notification = `
                 <div class="alert alert-${type} alert-has-icon alert-dismissible fade show" role="alert">
                     <div class="alert-icon"><i class="fas fa-info-circle"></i></div>
@@ -908,9 +990,8 @@ $transactions = $stmt->fetchAll();
 
             $('.alert-container').append(notification);
 
-            // Auto remove after 5 seconds
-            setTimeout(function () {
-                $('.alert-container .alert').last().fadeOut('slow', function () {
+            setTimeout(function() {
+                $('.alert-container .alert').last().fadeOut('slow', function() {
                     $(this).remove();
                 });
             }, 5000);
@@ -920,7 +1001,6 @@ $transactions = $stmt->fetchAll();
         console.log('🚀 Transaction Management System Loaded');
         console.log('📊 Total Transactions Ready to Ship:', totalTransactions);
         console.log('🔧 DataTable initialized with responsive design');
-
     </script>
 
     <!-- Additional CSS for better mobile responsiveness -->
@@ -930,7 +1010,8 @@ $transactions = $stmt->fetchAll();
                 font-size: 0.875rem;
             }
 
-            .product-image {
+            .product-image,
+            .item-image {
                 width: 35px;
                 height: 35px;
             }
@@ -942,6 +1023,10 @@ $transactions = $stmt->fetchAll();
 
             .modal-xl {
                 max-width: 95%;
+            }
+
+            .items-list {
+                max-height: 80px;
             }
         }
 
@@ -982,29 +1067,32 @@ $transactions = $stmt->fetchAll();
             background-color: rgba(255, 193, 7, 0.2) !important;
         }
 
-        /* Enhanced alert container */
-        .alert-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            max-width: 400px;
+        /* Status badge animations */
+        .badge {
+            transition: all 0.3s ease;
         }
 
-        .fade-in {
-            animation: fadeIn 0.5s ease-in;
+        .badge:hover {
+            transform: scale(1.05);
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
+        /* Button hover effects */
+        .btn-group .btn {
+            transition: all 0.2s ease;
+        }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .btn-group .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Card hover effects */
+        .card {
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
     </style>
 

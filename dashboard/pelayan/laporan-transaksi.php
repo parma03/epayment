@@ -41,36 +41,97 @@ if (strtotime($start_date) > strtotime($end_date)) {
     $end_date = date('Y-m-d');
 }
 
-// Query untuk mendapatkan data transaksi dengan JOIN ke tabel barang dan user
-$sql = "SELECT t.*, b.nama_barang, b.harga_barang, b.photo_barang, u.email as email_user
+// Query untuk mendapatkan data transaksi dengan JOIN ke detail transaksi, barang dan user
+$sql = "SELECT t.*, 
+               td.id_barang, 
+               td.nama_barang, 
+               td.harga_barang, 
+               td.jumlah_beli,
+               td.subtotal,
+               b.photo_barang, 
+               u.email as email_user
         FROM tb_transaksi t
-        LEFT JOIN tb_barang b ON t.id_barang = b.id_barang
+        LEFT JOIN tb_transaksi_detail td ON t.id_transaksi = td.id_transaksi
+        LEFT JOIN tb_barang b ON td.id_barang = b.id_barang
         LEFT JOIN tb_user u ON t.id_user = u.id_user
         WHERE DATE(t.created_at) BETWEEN ? AND ?
-        ORDER BY t.created_at DESC";
+        ORDER BY t.created_at DESC, td.id_detail ASC";
+
 $stmt = $pdo->prepare($sql);
 $stmt->execute([$start_date, $end_date]);
-$transaksis = $stmt->fetchAll();
+$transaksi_details = $stmt->fetchAll();
 
-// Statistik
-$total_transaksi = count($transaksis);
-$total_pendapatan = array_sum(array_column($transaksis, 'total_harga'));
-$total_barang_terjual = array_sum(array_column($transaksis, 'jumlah_beli'));
+// Mengelompokkan data berdasarkan transaksi
+$transaksis = [];
+$transaksi_summary = [];
+
+foreach ($transaksi_details as $detail) {
+    $id_transaksi = $detail['id_transaksi'];
+
+    if (!isset($transaksis[$id_transaksi])) {
+        $transaksis[$id_transaksi] = [
+            'id_transaksi' => $detail['id_transaksi'],
+            'order_id' => $detail['order_id'],
+            'nama_pemesan' => $detail['nama_pemesan'],
+            'nohp_pemesan' => $detail['nohp_pemesan'],
+            'alamat_pemesan' => $detail['alamat_pemesan'],
+            'email_user' => $detail['email_user'],
+            'total_harga' => $detail['total_harga'],
+            'status_pembayaran' => $detail['status_pembayaran'],
+            'created_at' => $detail['created_at'],
+            'items' => []
+        ];
+
+        $transaksi_summary[] = [
+            'id_transaksi' => $detail['id_transaksi'],
+            'total_harga' => $detail['total_harga'],
+            'status_pembayaran' => $detail['status_pembayaran'],
+            'created_at' => $detail['created_at']
+        ];
+    }
+
+    // Tambahkan item jika ada detail barang
+    if ($detail['id_barang']) {
+        $transaksis[$id_transaksi]['items'][] = [
+            'id_barang' => $detail['id_barang'],
+            'nama_barang' => $detail['nama_barang'],
+            'harga_barang' => $detail['harga_barang'],
+            'jumlah_beli' => $detail['jumlah_beli'],
+            'subtotal' => $detail['subtotal'],
+            'photo_barang' => $detail['photo_barang']
+        ];
+    }
+}
+
+// Konversi ke array numerik untuk kemudahan penggunaan
+$transaksis = array_values($transaksis);
+
+// Statistik berdasarkan transaksi_summary untuk menghindari duplikasi
+$total_transaksi = count($transaksi_summary);
+$total_pendapatan = array_sum(array_column($transaksi_summary, 'total_harga'));
+
+// Hitung total barang terjual dari detail
+$total_barang_terjual = 0;
+foreach ($transaksi_details as $detail) {
+    if ($detail['jumlah_beli']) {
+        $total_barang_terjual += $detail['jumlah_beli'];
+    }
+}
 
 // Transaksi berdasarkan status
-$transaksi_pending = array_filter($transaksis, function ($item) {
+$transaksi_pending = array_filter($transaksi_summary, function ($item) {
     return $item['status_pembayaran'] == 'pending';
 });
 
-$transaksi_paid = array_filter($transaksis, function ($item) {
+$transaksi_paid = array_filter($transaksi_summary, function ($item) {
     return $item['status_pembayaran'] == 'paid';
 });
 
-$transaksi_failed = array_filter($transaksis, function ($item) {
+$transaksi_failed = array_filter($transaksi_summary, function ($item) {
     return $item['status_pembayaran'] == 'failed';
 });
 
-$transaksi_cancelled = array_filter($transaksis, function ($item) {
+$transaksi_cancelled = array_filter($transaksi_summary, function ($item) {
     return $item['status_pembayaran'] == 'cancelled';
 });
 ?>
@@ -80,7 +141,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no" name="viewport">
-    <title>Laporan Transaksi &mdash; Stisla</title>
+    <title>Laporan Transaksi &mdash; E-Payment System</title>
 
     <!-- General CSS Files -->
     <link rel="stylesheet" href="../../assets/modules/bootstrap/css/bootstrap.min.css">
@@ -125,7 +186,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
             }
 
             .table {
-                font-size: 12px !important;
+                font-size: 11px !important;
             }
 
             .print-header {
@@ -167,6 +228,21 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
 
         .stats-card:hover {
             transform: translateY(-5px);
+        }
+
+        .item-details {
+            background-color: #f8f9fa;
+            border-left: 3px solid #007bff;
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 5px;
+        }
+
+        .item-image {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -350,8 +426,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                                                 <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
                                                 <h5 class="text-muted">Tidak ada data transaksi</h5>
                                                 <p class="text-muted">Tidak ada transaksi yang ditemukan dalam periode
-                                                    tanggal
-                                                    yang dipilih.</p>
+                                                    tanggal yang dipilih.</p>
                                             </div>
                                         <?php else: ?>
                                             <div class="table-responsive">
@@ -359,12 +434,9 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                                                     <thead>
                                                         <tr>
                                                             <th class="text-center"><i class="fas fa-hashtag"></i></th>
-                                                            <th class="no-print"><i class="fas fa-image mr-1"></i>Produk
-                                                            </th>
                                                             <th><i class="fas fa-shopping-cart mr-1"></i>Order ID</th>
                                                             <th><i class="fas fa-user mr-1"></i>Pelanggan</th>
-                                                            <th><i class="fas fa-box mr-1"></i>Barang</th>
-                                                            <th><i class="fas fa-sort-numeric-up mr-1"></i>Jumlah</th>
+                                                            <th><i class="fas fa-box mr-1"></i>Detail Barang</th>
                                                             <th><i class="fas fa-money-bill-wave mr-1"></i>Total Harga</th>
                                                             <th><i class="fas fa-info-circle mr-1"></i>Status</th>
                                                             <th><i class="fas fa-calendar-plus mr-1"></i>Tanggal</th>
@@ -377,19 +449,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                                                                     <span
                                                                         class="badge badge-secondary"><?php echo $index + 1; ?></span>
                                                                 </td>
-                                                                <td class="no-print">
-                                                                    <?php if ($transaksi['photo_barang']): ?>
-                                                                        <img alt="product"
-                                                                            src="../../assets/img/products/<?php echo $transaksi['photo_barang']; ?>"
-                                                                            class="avatar-preview"
-                                                                            title="<?php echo htmlspecialchars($transaksi['nama_barang']); ?>">
-                                                                    <?php else: ?>
-                                                                        <img alt="product"
-                                                                            src="../../assets/img/products/default-product.png"
-                                                                            class="avatar-preview"
-                                                                            title="<?php echo htmlspecialchars($transaksi['nama_barang']); ?>">
-                                                                    <?php endif; ?>
-                                                                </td>
                                                                 <td>
                                                                     <strong><?php echo htmlspecialchars($transaksi['order_id']); ?></strong>
                                                                 </td>
@@ -401,13 +460,36 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                                                                         class="text-muted"><?php echo htmlspecialchars($transaksi['email_user']); ?></small>
                                                                 </td>
                                                                 <td>
-                                                                    <strong><?php echo htmlspecialchars($transaksi['nama_barang']); ?></strong>
-                                                                </td>
-                                                                <td>
-                                                                    <span class="badge badge-info">
-                                                                        <i
-                                                                            class="fas fa-cubes mr-1"></i><?php echo $transaksi['jumlah_beli']; ?>
-                                                                    </span>
+                                                                    <?php if (!empty($transaksi['items'])): ?>
+                                                                        <?php foreach ($transaksi['items'] as $item): ?>
+                                                                            <div class="item-details">
+                                                                                <div class="d-flex align-items-center">
+                                                                                    <div class="no-print mr-2">
+                                                                                        <?php if ($item['photo_barang']): ?>
+                                                                                            <img src="../../assets/img/products/<?php echo $item['photo_barang']; ?>"
+                                                                                                class="item-image"
+                                                                                                alt="<?php echo htmlspecialchars($item['nama_barang']); ?>">
+                                                                                        <?php else: ?>
+                                                                                            <img src="../../assets/img/products/default-product.png"
+                                                                                                class="item-image"
+                                                                                                alt="Default">
+                                                                                        <?php endif; ?>
+                                                                                    </div>
+                                                                                    <div class="flex-grow-1">
+                                                                                        <strong><?php echo htmlspecialchars($item['nama_barang']); ?></strong>
+                                                                                        <br>
+                                                                                        <small class="text-muted">
+                                                                                            <?php echo $item['jumlah_beli']; ?> x
+                                                                                            Rp <?php echo number_format($item['harga_barang'], 0, ',', '.'); ?> =
+                                                                                            <strong>Rp <?php echo number_format($item['subtotal'], 0, ',', '.'); ?></strong>
+                                                                                        </small>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        <?php endforeach; ?>
+                                                                    <?php else: ?>
+                                                                        <span class="text-muted">Tidak ada detail barang</span>
+                                                                    <?php endif; ?>
                                                                 </td>
                                                                 <td>
                                                                     <span class="text-success font-weight-bold">
@@ -452,10 +534,10 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                                                     </tbody>
                                                     <tfoot>
                                                         <tr class="bg-light font-weight-bold">
-                                                            <td colspan="5" class="text-right"><strong>TOTAL:</strong></td>
+                                                            <td colspan="3" class="text-right"><strong>TOTAL:</strong></td>
                                                             <td class="text-right">
                                                                 <span class="badge badge-info">
-                                                                    <?php echo $total_barang_terjual; ?>
+                                                                    <?php echo $total_barang_terjual; ?> item
                                                                 </span>
                                                             </td>
                                                             <td class="text-right">
@@ -616,18 +698,29 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
 
     <script>
         // Initialize DataTable with enhanced features
-        // Ganti bagian footerCallback di DataTables initialization dengan kode ini:
-
         $("#table-1").DataTable({
-            "columnDefs": [
-                { "orderable": false, "targets": [1] }, // Photo column
-                { "className": "text-center", "targets": [0] },
-                { "className": "text-right", "targets": [5, 6] } // Jumlah dan Total Harga columns
+            "columnDefs": [{
+                    "orderable": false,
+                    "targets": [3]
+                }, // Detail Barang column
+                {
+                    "className": "text-center",
+                    "targets": [0]
+                },
+                {
+                    "className": "text-right",
+                    "targets": [4]
+                } // Total Harga column
             ],
             "responsive": true,
             "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Semua"]],
-            "order": [[8, "desc"]], // Sort by created_at descending (kolom ke-8)
+            "lengthMenu": [
+                [10, 25, 50, 100, -1],
+                [10, 25, 50, 100, "Semua"]
+            ],
+            "order": [
+                [6, "desc"]
+            ], // Sort by created_at descending (kolom ke-6)
             "language": {
                 "lengthMenu": "Tampilkan _MENU_ data per halaman",
                 "zeroRecords": "Data tidak ditemukan",
@@ -645,71 +738,9 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 "processing": "⏳ Memproses...",
                 "loadingRecords": "⏳ Memuat data..."
             },
-            "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
-            "footerCallback": function (row, data, start, end, display) {
-                var api = this.api();
-
-                // Helper function to convert formatted number to integer
-                var intVal = function (i) {
-                    if (typeof i === 'string') {
-                        // Remove HTML tags and non-numeric characters, keep only digits
-                        var cleanStr = i.replace(/<[^>]*>/g, '').replace(/[^\d]/g, '');
-                        return parseInt(cleanStr) || 0;
-                    }
-                    return typeof i === 'number' ? i : 0;
-                };
-
-                // Calculate totals for current page
-                var totalJumlahPage = 0;
-                var totalHargaPage = 0;
-
-                // Calculate totals for all data (filtered)
-                var totalJumlahAll = 0;
-                var totalHargaAll = 0;
-
-                // Current page calculation
-                api.rows({ page: 'current' }).data().each(function (row) {
-                    // Struktur kolom: #, Photo, Order ID, Pelanggan, Barang, Jumlah, Total Harga, Status, Tanggal
-                    // Index:           0    1      2        3          4       5        6            7       8
-                    totalJumlahPage += intVal(row[5]); // Kolom Jumlah
-                    totalHargaPage += intVal(row[6]);  // Kolom Total Harga
-                });
-
-                // All data calculation (filtered)
-                api.rows({ search: 'applied' }).data().each(function (row) {
-                    totalJumlahAll += intVal(row[5]); // Kolom Jumlah
-                    totalHargaAll += intVal(row[6]);  // Kolom Total Harga
-                });
-
-                // Update footer - pastikan tfoot ada di HTML
-                var $footer = $(api.table().footer());
-                if ($footer.length) {
-                    // Update kolom Jumlah (kolom ke-5)
-                    $(api.column(5).footer()).html(
-                        '<span class="badge badge-info">' +
-                        '<i class="fas fa-cubes mr-1"></i>' +
-                        totalJumlahAll.toLocaleString('id-ID') +
-                        '</span>' +
-                        (totalJumlahPage !== totalJumlahAll ?
-                            '<br><small class="text-muted">Halaman: ' + totalJumlahPage.toLocaleString('id-ID') + '</small>' :
-                            '')
-                    );
-
-                    // Update kolom Total Harga (kolom ke-6)
-                    $(api.column(6).footer()).html(
-                        '<span class="text-success">' +
-                        '<strong>Rp ' + totalHargaAll.toLocaleString('id-ID') + '</strong>' +
-                        '</span>' +
-                        (totalHargaPage !== totalHargaAll ?
-                            '<br><small class="text-muted">Halaman: Rp ' + totalHargaPage.toLocaleString('id-ID') + '</small>' :
-                            '')
-                    );
-                }
-            }
+            "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
         });
 
-
-        // Ganti fungsi printReport() yang lama dengan yang ini
         function printReport() {
             // Simpan state asli
             const originalTitle = document.title;
@@ -730,7 +761,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
             }
 
             // Prepare untuk print
-            setTimeout(function () {
+            setTimeout(function() {
                 if (typeof Swal !== 'undefined') {
                     Swal.close();
                 }
@@ -808,7 +839,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
         }
 
         // Tambahkan event listener untuk after print cleanup
-        window.addEventListener('afterprint', function () {
+        window.addEventListener('afterprint', function() {
             // Cleanup setelah print selesai
             document.body.classList.remove('print-mode');
 
@@ -820,7 +851,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
         });
 
         // Auto-submit form when date changes (optional)
-        $('input[name="start_date"], input[name="end_date"]').on('change', function () {
+        $('input[name="start_date"], input[name="end_date"]').on('change', function() {
             // Auto-submit after both dates are selected
             var startDate = $('input[name="start_date"]').val();
             var endDate = $('input[name="end_date"]').val();
@@ -828,29 +859,35 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
             if (startDate && endDate) {
                 // Validate dates
                 if (new Date(startDate) > new Date(endDate)) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Peringatan!',
-                        text: 'Tanggal mulai tidak boleh lebih besar dari tanggal akhir!',
-                        confirmButtonText: 'OK'
-                    });
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Peringatan!',
+                            text: 'Tanggal mulai tidak boleh lebih besar dari tanggal akhir!',
+                            confirmButtonText: 'OK'
+                        });
+                    } else {
+                        alert('Tanggal mulai tidak boleh lebih besar dari tanggal akhir!');
+                    }
                     return;
                 }
 
                 // Show loading and auto-submit
-                Swal.fire({
-                    title: 'Memfilter Data...',
-                    text: 'Mohon tunggu sebentar',
-                    allowOutsideClick: false,
-                    allowEscapeKey: false,
-                    showConfirmButton: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Memfilter Data...',
+                        text: 'Mohon tunggu sebentar',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                }
 
                 // Submit form after short delay
-                setTimeout(function () {
+                setTimeout(function() {
                     $('form').submit();
                 }, 500);
             }
@@ -867,7 +904,7 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
         }
 
         // Add quick date buttons after DOM is ready
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Add quick date range buttons
             var quickDateButtons = `
                 <div class="btn-group mb-3" role="group" aria-label="Quick Date Range">
@@ -894,29 +931,32 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
             var data = table.rows().data().toArray();
 
             if (data.length === 0) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Tidak Ada Data',
-                    text: 'Tidak ada data untuk diekspor!',
-                    confirmButtonText: 'OK'
-                });
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Tidak Ada Data',
+                        text: 'Tidak ada data untuk diekspor!',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    alert('Tidak ada data untuk diekspor!');
+                }
                 return;
             }
 
             // Create CSV content untuk transaksi
             var csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "No,Order ID,Pelanggan,No HP,Barang,Jumlah,Total Harga,Status,Tanggal\n";
+            csvContent += "No,Order ID,Pelanggan,No HP,Email,Detail Barang,Total Harga,Status,Tanggal\n";
 
-            data.forEach(function (row, index) {
+            data.forEach(function(row, index) {
                 var cleanRow = [
                     index + 1,
-                    row[2].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Order ID
-                    row[3].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Pelanggan
-                    row[4].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Barang
-                    row[5].replace(/[^\d]/g, ''), // Jumlah
-                    row[6].replace(/[^\d]/g, ''), // Total Harga
-                    row[7].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Status
-                    row[8].replace(/<[^>]*>/g, '').replace(/"/g, '""')  // Tanggal
+                    row[1].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Order ID
+                    row[2].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Pelanggan
+                    row[3].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Detail Barang
+                    row[4].replace(/[^\d]/g, ''), // Total Harga
+                    row[5].replace(/<[^>]*>/g, '').replace(/"/g, '""'), // Status
+                    row[6].replace(/<[^>]*>/g, '').replace(/"/g, '""') // Tanggal
                 ];
                 csvContent += '"' + cleanRow.join('","') + '"\n';
             });
@@ -929,17 +969,21 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
             link.click();
             document.body.removeChild(link);
 
-            Swal.fire({
-                icon: 'success',
-                title: 'Berhasil!',
-                text: 'Data berhasil diekspor ke Excel!',
-                timer: 2000,
-                showConfirmButton: false
-            });
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil!',
+                    text: 'Data berhasil diekspor ke Excel!',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                alert('Data berhasil diekspor ke Excel!');
+            }
         }
 
         // Add export button
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Add export button next to print button
             var exportButton = `
                 <button type="button" class="btn btn-info btn-lg ml-2" onclick="exportToExcel()">
@@ -951,113 +995,24 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
         });
 
         // Tooltip initialization
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('[data-toggle="tooltip"]').tooltip();
         });
 
         // Smooth scroll for statistics cards
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('.stats-card').hover(
-                function () {
+                function() {
                     $(this).addClass('shadow-lg');
                 },
-                function () {
+                function() {
                     $(this).removeClass('shadow-lg');
                 }
             );
         });
 
-        // Auto-refresh data every 5 minutes (optional)
-        var autoRefresh = false; // Set to true to enable auto-refresh
-
-        if (autoRefresh) {
-            setInterval(function () {
-                if (!document.hidden) { // Only refresh if page is visible
-                    Swal.fire({
-                        title: 'Memperbarui Data...',
-                        text: 'Mengambil data terbaru',
-                        timer: 2000,
-                        timerProgressBar: true,
-                        showConfirmButton: false,
-                        allowOutsideClick: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    }).then(() => {
-                        location.reload();
-                    });
-                }
-            }, 300000); // 5 minutes
-        }
-
-        // Print preview function
-        function printPreview() {
-            // Create a new window for print preview
-            var printWindow = window.open('', '_blank', 'width=800,height=600');
-
-            // Get the HTML content to print
-            var printContent = document.documentElement.outerHTML;
-
-            // Write content to new window
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-
-            // Add print styles to the new window
-            printWindow.onload = function () {
-                // Add print-specific styles
-                var style = printWindow.document.createElement('style');
-                style.textContent = `
-                    @media screen {
-                        .no-print { display: none !important; }
-                        .print-header { display: block !important; }
-                        .print-footer { display: block !important; }
-                    }
-                `;
-                printWindow.document.head.appendChild(style);
-
-                // Show print dialog
-                setTimeout(function () {
-                    printWindow.print();
-                    printWindow.close();
-                }, 1000);
-            };
-        }
-
-        // Handle print media query changes
-        if (window.matchMedia) {
-            var mediaQueryList = window.matchMedia('print');
-            mediaQueryList.addListener(function (mql) {
-                if (mql.matches) {
-                    // Before print
-                    console.log('Printing...');
-                } else {
-                    // After print
-                    console.log('Print dialog closed');
-                }
-            });
-        }
-
-        // SweetAlert2 for alerts (make sure SweetAlert2 is included)
-        $(document).ready(function () {
-            // Check if SweetAlert2 is available
-            if (typeof Swal === 'undefined') {
-                console.warn('SweetAlert2 is not loaded. Using regular alerts.');
-                window.Swal = {
-                    fire: function (options) {
-                        if (typeof options === 'string') {
-                            alert(options);
-                        } else if (options.text) {
-                            alert(options.text);
-                        }
-                    },
-                    showLoading: function () { },
-                    close: function () { }
-                };
-            }
-        });
-
         // Keyboard shortcuts
-        $(document).keydown(function (e) {
+        $(document).keydown(function(e) {
             // Ctrl+P for print
             if (e.ctrlKey && e.keyCode === 80) {
                 e.preventDefault();
@@ -1078,12 +1033,75 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
         });
 
         // Add keyboard shortcut hints
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('[data-toggle="tooltip"]').tooltip();
 
             // Add tooltips for buttons
             $('.btn:contains("Cetak")').attr('title', 'Cetak Laporan (Ctrl+P)').attr('data-toggle', 'tooltip');
             $('.btn:contains("Export")').attr('title', 'Export ke Excel (Ctrl+E)').attr('data-toggle', 'tooltip');
+        });
+
+        // SweetAlert2 fallback
+        $(document).ready(function() {
+            // Check if SweetAlert2 is available
+            if (typeof Swal === 'undefined') {
+                console.warn('SweetAlert2 is not loaded. Using regular alerts.');
+                window.Swal = {
+                    fire: function(options) {
+                        if (typeof options === 'string') {
+                            alert(options);
+                        } else if (options.text) {
+                            alert(options.text);
+                        }
+                    },
+                    showLoading: function() {},
+                    close: function() {}
+                };
+            }
+        });
+
+        // Final initialization
+        $(document).ready(function() {
+            // Add loading animation to statistics cards
+            $('.stats-card .card-body').each(function() {
+                var $this = $(this);
+                var targetValue = parseInt($this.text().replace(/[^\d]/g, ''));
+                var currentValue = 0;
+                var increment = Math.ceil(targetValue / 50);
+
+                if (targetValue > 0) {
+                    var timer = setInterval(function() {
+                        currentValue += increment;
+                        if (currentValue >= targetValue) {
+                            currentValue = targetValue;
+                            clearInterval(timer);
+                        }
+
+                        if ($this.text().includes('Rp')) {
+                            $this.text('Rp ' + currentValue.toLocaleString('id-ID'));
+                        } else {
+                            $this.text(currentValue.toLocaleString('id-ID'));
+                        }
+                    }, 30);
+                }
+            });
+
+            // Add success message if data loaded
+            <?php if (!empty($transaksis)): ?>
+                setTimeout(function() {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Data Berhasil Dimuat',
+                            text: 'Menampilkan <?php echo $total_transaksi; ?> transaksi',
+                            timer: 2000,
+                            showConfirmButton: false,
+                            position: 'top-end',
+                            toast: true
+                        });
+                    }
+                }, 1000);
+            <?php endif; ?>
         });
     </script>
 
@@ -1092,17 +1110,13 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
 
     <!-- Additional CSS for better print styling -->
     <style>
-        /* Additional print styles */
-        /* Ganti CSS di dalam tag <style> dengan kode ini */
+        /* Print styles */
         @media print {
-
-            /* Reset dan hide semua elemen yang tidak perlu */
             * {
                 -webkit-print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }
 
-            /* Hide semua elemen yang tidak perlu dicetak */
             .no-print,
             .main-sidebar,
             .navbar-bg,
@@ -1127,7 +1141,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 display: none !important;
             }
 
-            /* Reset layout untuk print */
             body {
                 margin: 0 !important;
                 padding: 0 !important;
@@ -1164,7 +1177,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 padding: 0 !important;
             }
 
-            /* Card styling untuk print */
             .card {
                 border: none !important;
                 box-shadow: none !important;
@@ -1176,7 +1188,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 padding: 0 !important;
             }
 
-            /* Print header styling */
             .print-header {
                 display: block !important;
                 text-align: center;
@@ -1197,7 +1208,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 margin: 5px 0 !important;
             }
 
-            /* Statistics cards untuk print */
             .stats-card {
                 display: block !important;
                 border: 1px solid #ddd !important;
@@ -1226,7 +1236,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 margin: 0 !important;
             }
 
-            /* Table styling untuk print */
             .table-responsive {
                 overflow: visible !important;
             }
@@ -1269,7 +1278,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 page-break-inside: avoid !important;
             }
 
-            /* Badge styling untuk print */
             .badge {
                 border: 1px solid #000 !important;
                 background-color: #fff !important;
@@ -1279,7 +1287,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 font-weight: normal !important;
             }
 
-            /* Text colors untuk print */
             .text-success,
             .text-primary,
             .text-warning,
@@ -1288,19 +1295,24 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 color: #000 !important;
             }
 
-            /* Hide images di kolom foto */
-            .avatar-preview {
+            .item-image {
                 display: none !important;
             }
 
-            /* Summary cards untuk print */
+            .item-details {
+                background-color: #f9f9f9 !important;
+                border-left: 2px solid #000 !important;
+                margin: 2px 0 !important;
+                padding: 4px !important;
+                font-size: 8px !important;
+            }
+
             .list-group-item {
                 border: 1px solid #ddd !important;
                 padding: 5px !important;
                 font-size: 9px !important;
             }
 
-            /* Print footer styling */
             .print-footer {
                 display: block !important;
                 margin-top: 20px !important;
@@ -1324,7 +1336,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 margin-bottom: 3px !important;
             }
 
-            /* Khusus untuk status transaksi dan ringkasan */
             .row:has(.col-md-6) .card {
                 border: 1px solid #ddd !important;
                 margin-bottom: 10px !important;
@@ -1347,26 +1358,22 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 padding: 8px !important;
             }
 
-            /* Tabel status transaksi */
             .table-sm th,
             .table-sm td {
                 padding: 3px !important;
                 font-size: 8px !important;
             }
 
-            /* Responsif untuk kertas A4 */
             @page {
                 size: A4;
                 margin: 1cm;
             }
 
-            /* Pastikan tidak ada overflow */
             body * {
                 max-width: 100% !important;
                 box-sizing: border-box !important;
             }
 
-            /* Force break untuk section besar */
             .section {
                 page-break-inside: avoid;
             }
@@ -1396,26 +1403,24 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
                 }
             }
 
-            .avatar-preview {
-                width: 50px;
-                height: 50px;
+            .item-image {
+                width: 40px;
+                height: 40px;
                 object-fit: cover;
                 border-radius: 5px;
                 cursor: pointer;
                 transition: transform 0.2s;
             }
 
-            .avatar-preview:hover {
+            .item-image:hover {
                 transform: scale(1.1);
             }
 
-            /* Loading animation for statistics cards */
             .stats-card .card-body {
                 font-size: 2rem;
                 font-weight: bold;
             }
 
-            /* Responsive adjustments */
             @media (max-width: 768px) {
                 .alert-container {
                     width: 90%;
@@ -1432,51 +1437,6 @@ $transaksi_cancelled = array_filter($transaksis, function ($item) {
             }
         }
     </style>
-
-    <!-- Add this before closing body tag -->
-    <script>
-        // Final initialization
-        $(document).ready(function () {
-            // Add loading animation to statistics cards
-            $('.stats-card .card-body').each(function () {
-                var $this = $(this);
-                var targetValue = parseInt($this.text().replace(/[^\d]/g, ''));
-                var currentValue = 0;
-                var increment = Math.ceil(targetValue / 50);
-
-                var timer = setInterval(function () {
-                    currentValue += increment;
-                    if (currentValue >= targetValue) {
-                        currentValue = targetValue;
-                        clearInterval(timer);
-                    }
-
-                    if ($this.text().includes('Rp')) {
-                        $this.text('Rp ' + currentValue.toLocaleString('id-ID'));
-                    } else {
-                        $this.text(currentValue.toLocaleString('id-ID'));
-                    }
-                }, 30);
-            });
-
-            // Add success message if data loaded
-            <?php if (!empty($barangs)): ?>
-                setTimeout(function () {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Data Berhasil Dimuat',
-                            text: 'Menampilkan <?php echo $total_barang; ?> barang',
-                            timer: 2000,
-                            showConfirmButton: false,
-                            position: 'top-end',
-                            toast: true
-                        });
-                    }
-                }, 1000);
-            <?php endif; ?>
-        });
-    </script>
 </body>
 
 </html>
